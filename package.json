@@ -4,8 +4,10 @@
   "description": "Servidor Express.js para integração com Evolution API e WhatsApp",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "start": "node src/server-simple.js",
+    "start:prod": "NODE_ENV=production node src/server.js",
+    "dev": "node start-dev.js",
+    "dev:watch": "nodemon start-dev.js",
     "test": "jest",
     "test:watch": "jest --watch"
   },
