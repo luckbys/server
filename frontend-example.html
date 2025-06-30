@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evolution Webhook Frontend - Teste</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status { 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin: 10px 0; 
+            font-weight: bold;
+        }
+        .connected { 
+            background: #d4edda; 
+            color: #155724; 
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected { 
+            background: #f8d7da; 
+            color: #721c24; 
+            border: 1px solid #f5c6cb;
+        }
+        .messages {
+            border: 1px solid #ddd;
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            margin: 10px 0;
+            background: #fafafa;
+            border-radius: 5px;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 8px;
+            background: white;
+            border-left: 4px solid #007bff;
+            border-radius: 3px;
+        }
+        .message strong {
+            color: #007bff;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+        .stat-card h4 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 5px;
+        }
+        .controls input, .controls button {
+            margin: 5px;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+        }
+        .controls button {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+            cursor: pointer;
+        }
+        .controls button:hover {
+            background: #0056b3;
+        }
+        .qr-codes {
+            margin: 20px 0;
+        }
+        .qr-code {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+        .qr-code img {
+            max-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 Evolution Webhook Frontend - Teste de Integração</h1>
+        
+        <!-- Status de Conexão -->
+        <div id="status" class="status disconnected">
+            🔴 Desconectado do servidor
+        </div>
+
+        <!-- Controles -->
+        <div class="controls">
+            <h3>🎮 Controles</h3>
+            <input type="text" id="instanceName" placeholder="Nome da instância" value="test-evolution-instance">
+            <button onclick="joinInstance()">Entrar na Instância</button>
+            <button onclick="getStats()">Atualizar Stats</button>
+            <button onclick="testMessage()">Simular Mensagem</button>
+            <button onclick="pingServer()">Ping Servidor</button>
+        </div>
+
+        <!-- Estatísticas -->
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <h4>📊 Servidor</h4>
+                <p id="serverUptime">Uptime: --</p>
+                <p id="serverMemory">Memória: --</p>
+            </div>
+            <div class="stat-card">
+                <h4>🔌 WebSocket</h4>
+                <p id="wsClients">Clientes: --</p>
+                <p id="wsRooms">Salas: --</p>
+            </div>
+            <div class="stat-card">
+                <h4>📨 Webhooks</h4>
+                <p id="webhookTotal">Total: --</p>
+                <p id="webhookLast">Último: --</p>
+            </div>
+        </div>
+
+        <!-- QR Codes -->
+        <div class="qr-codes" id="qrCodes">
+            <h3>📱 QR Codes</h3>
+            <p>Nenhum QR Code disponível</p>
+        </div>
+
+        <!-- Mensagens -->
+        <div>
+            <h3>💬 Mensagens Recentes</h3>
+            <div class="messages" id="messages">
+                <p>Aguardando mensagens...</p>
+            </div>
+        </div>
+
+        <!-- Log de Eventos -->
+        <div>
+            <h3>📋 Log de Eventos</h3>
+            <div class="messages" id="eventLog">
+                <p>Conectando ao servidor...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Conectar ao WebSocket
+        const socket = io('http://localhost:3001', {
+            transports: ['websocket']
+        });
+
+        let messageCount = 0;
+
+        // Elementos DOM
+        const statusEl = document.getElementById('status');
+        const messagesEl = document.getElementById('messages');
+        const eventLogEl = document.getElementById('eventLog');
+        const qrCodesEl = document.getElementById('qrCodes');
+
+        // Função para adicionar log
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            logEntry.style.color = type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#333';
+            eventLogEl.appendChild(logEntry);
+            eventLogEl.scrollTop = eventLogEl.scrollHeight;
+        }
+
+        // Eventos de conexão
+        socket.on('connect', () => {
+            statusEl.textContent = '🟢 Conectado ao servidor';
+            statusEl.className = 'status connected';
+            addLog('✅ Conectado ao WebSocket', 'success');
+        });
+
+        socket.on('disconnect', () => {
+            statusEl.textContent = '🔴 Desconectado do servidor';
+            statusEl.className = 'status disconnected';
+            addLog('❌ Desconectado do WebSocket', 'error');
+        });
+
+        // Status do servidor
+        socket.on('server-status', (data) => {
+            addLog(`📊 Status do servidor: ${data.status} (uptime: ${Math.floor(data.uptime)}s)`, 'info');
+        });
+
+        // Novas mensagens
+        socket.on('new-message', (data) => {
+            messageCount++;
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message';
+            messageEl.innerHTML = `
+                <strong>${data.pushName || data.from}</strong> 
+                <small>(${data.instance})</small><br>
+                ${data.content}<br>
+                <small>${new Date(data.timestamp).toLocaleString()}</small>
+            `;
+            
+            if (messagesEl.textContent.includes('Aguardando')) {
+                messagesEl.innerHTML = '';
+            }
+            
+            messagesEl.insertBefore(messageEl, messagesEl.firstChild);
+            addLog(`💬 Nova mensagem de ${data.pushName}: ${data.content.substring(0, 50)}...`, 'success');
+        });
+
+        // Atualizações de conexão
+        socket.on('connection-update', (data) => {
+            addLog(`🔗 Conexão ${data.instance}: ${data.status}`, 'info');
+        });
+
+        // QR Code atualizado
+        socket.on('qr-updated', (data) => {
+            if (data.qrCode) {
+                const qrEl = document.createElement('div');
+                qrEl.className = 'qr-code';
+                qrEl.innerHTML = `
+                    <h4>${data.instance}</h4>
+                    <img src="${data.qrCode}" alt="QR Code ${data.instance}">
+                    ${data.pairingCode ? `<p>Código: ${data.pairingCode}</p>` : ''}
+                `;
+                
+                if (qrCodesEl.textContent.includes('Nenhum QR Code')) {
+                    qrCodesEl.innerHTML = '<h3>📱 QR Codes</h3>';
+                }
+                
+                qrCodesEl.appendChild(qrEl);
+                addLog(`📱 QR Code atualizado para ${data.instance}`, 'success');
+            }
+        });
+
+        // Pong response
+        socket.on('pong', (data) => {
+            addLog(`🏓 Pong recebido - uptime: ${Math.floor(data.uptime)}s`, 'info');
+        });
+
+        // Outros eventos
+        socket.on('generic-event', (data) => {
+            addLog(`📨 Evento ${data.event} da instância ${data.instance}`, 'info');
+        });
+
+        socket.on('joined-instance', (data) => {
+            addLog(`✅ Entrou na instância: ${data.instance}`, 'success');
+        });
+
+        // Funções de controle
+        function joinInstance() {
+            const instanceName = document.getElementById('instanceName').value;
+            if (instanceName) {
+                socket.emit('join-instance', instanceName);
+                addLog(`📡 Solicitando entrada na instância: ${instanceName}`, 'info');
+            }
+        }
+
+        function getStats() {
+            fetch('http://localhost:3001/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('serverUptime').textContent = `Uptime: ${Math.floor(data.server.uptime)}s`;
+                        document.getElementById('serverMemory').textContent = `Memória: ${Math.round(data.server.memory.rss / 1024 / 1024)}MB`;
+                        document.getElementById('wsClients').textContent = `Clientes: ${data.websocket.connectedClients}`;
+                        document.getElementById('wsRooms').textContent = `Salas: ${data.websocket.rooms}`;
+                        document.getElementById('webhookTotal').textContent = `Total: ${data.webhook.totalReceived}`;
+                        document.getElementById('webhookLast').textContent = `Último: ${data.webhook.lastReceived || 'Nunca'}`;
+                        
+                        addLog('📊 Estatísticas atualizadas', 'success');
+                    }
+                })
+                .catch(error => {
+                    addLog(`❌ Erro ao buscar stats: ${error.message}`, 'error');
+                });
+        }
+
+        function testMessage() {
+            // Simular webhook de teste
+            fetch('http://localhost:3001/api/webhook/evolution/test-frontend', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    event: 'MESSAGES_UPSERT',
+                    data: {
+                        key: {
+                            id: `test_msg_${Date.now()}`,
+                            remoteJid: '5511999999999@s.whatsapp.net'
+                        },
+                        pushName: 'Teste Frontend',
+                        message: {
+                            conversation: `Mensagem de teste ${new Date().toLocaleTimeString()}`
+                        },
+                        messageTimestamp: Math.floor(Date.now() / 1000)
+                    }
+                })
+            }).then(() => {
+                addLog('📤 Mensagem de teste enviada', 'success');
+            }).catch(error => {
+                addLog(`❌ Erro ao enviar teste: ${error.message}`, 'error');
+            });
+        }
+
+        function pingServer() {
+            socket.emit('ping');
+            addLog('🏓 Ping enviado para o servidor', 'info');
+        }
+
+        // Carregar stats iniciais
+        setTimeout(getStats, 1000);
+        
+        // Auto-refresh stats a cada 30 segundos
+        setInterval(getStats, 30000);
+    </script>
+</body>
+</html> 
