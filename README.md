@@ -275,48 +275,71 @@ server/
 ## 🔧 Configuração da Evolution API
 
 1. Configure o webhook na Evolution API:
-```
-POST /webhook/set/:instanceName
-{
-  "url": "https://your-server.com/api/webhook/evolution/:instanceName",
-  "events": ["messages.upsert", "connection.update", "qr.updated"]
-}
-```
-
-2. Configure a instância no banco:
 ```json
 {
-  "name": "Instância Principal",
-  "instanceName": "my-instance",
-  "apiUrl": "http://localhost:8080",
-  "apiKey": "your-api-key",
-  "isDefault": true
+  "webhook": {
+    "url": "http://localhost:3001/api",
+    "enabled": true
+  }
 }
 ```
 
-## 🐛 Solução de Problemas
+2. Verifique se a instância está conectada:
+```
+GET http://localhost:3001/api/instance/fetchInstances
+```
 
-### Servidor não inicia
-1. Verifique as variáveis de ambiente
-2. Confirme a conexão com Supabase
-3. Verifique se a porta está disponível
+## 📊 WebSocket
 
-### Webhook não recebe mensagens
-1. Verifique a configuração do webhook na Evolution API
-2. Confirme se a instância está registrada
-3. Verifique os logs do servidor
+O servidor também disponibiliza eventos via WebSocket em:
+```
+ws://localhost:3001
+```
 
-### WebSocket não conecta
-1. Verifique as configurações de CORS
-2. Confirme se a porta está acessível
-3. Verifique os logs de conexão
+## 🛠️ Scripts Disponíveis
 
-## 🤝 Contribuição
+- `npm run dev`: Inicia o servidor em modo desenvolvimento
+- `npm run simple`: Inicia o servidor em modo simplificado
+- `npm run test:evolution`: Testa a compatibilidade com Evolution API
+- `npm test`: Executa os testes unitários
 
-1. Fork o projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Push para a branch
+## 📝 Eventos Suportados
+
+- `MESSAGES_UPSERT`: Novas mensagens
+- `CONNECTION_UPDATE`: Atualizações de conexão
+- `QRCODE_UPDATED`: QR Code atualizado
+- `APPLICATION_STARTUP`: Inicialização da aplicação
+- `CONTACTS_UPSERT`: Atualização de contatos
+- `CHATS_UPSERT`: Atualização de chats
+- `GROUPS_UPSERT`: Atualização de grupos
+- `PRESENCE_UPDATE`: Atualização de presença
+- `CALL`: Chamadas
+- `TYPEBOT_START`: Início de fluxo Typebot
+
+## 🔒 Variáveis de Ambiente
+
+```env
+NODE_ENV=development
+PORT=3001
+WEBHOOK_SECRET=seu_secret
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+WEBHOOK_BASE_URL=http://localhost:3001
+```
+
+## 📦 Dependências Principais
+
+- Express.js
+- Socket.IO
+- Axios
+- Winston (Logs)
+- CORS
+
+## 🤝 Contribuindo
+
+1. Faça o fork do projeto
+2. Crie sua feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
 5. Abra um Pull Request
 
 ## 📄 Licença

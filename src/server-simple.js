@@ -3,14 +3,13 @@ process.env.NODE_ENV = 'development';
 process.env.PORT = process.env.PORT || '3001';
 process.env.WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'test_secret';
 process.env.ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001';
-process.env.WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL || 'https://webhook.bkcrm.devsible.com.br';
+process.env.WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL || 'http://localhost:3001';
 
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const logger = require('./config/logger-simple');
-const webhookConfig = require('./config/webhook-simple');
 
 // Criar servidor
 const app = express();
@@ -47,7 +46,7 @@ router.get('/', (req, res) => {
     message: 'Welcome to the Evolution Webhook Server!',
     version: '2.0.0',
     documentation: 'https://doc.evolution-api.com',
-    serverUrl: webhookConfig.baseUrl,
+    serverUrl: process.env.WEBHOOK_BASE_URL,
     capabilities: {
       webhooks: true,
       websocket: true,
@@ -57,7 +56,31 @@ router.get('/', (req, res) => {
   });
 });
 
-// Webhook da Evolution API
+// Webhook genérico da Evolution API (para qualquer evento)
+router.post('/:event', (req, res) => {
+  const { event } = req.params;
+  const webhookData = req.body;
+  
+  logger.info(`📨 Webhook ${event.toUpperCase()} recebido:`, {
+    event,
+    data: webhookData
+  });
+  
+  // Emitir evento via WebSocket
+  io.emit('webhook', {
+    event,
+    data: webhookData,
+    timestamp: new Date().toISOString()
+  });
+  
+  res.json({
+    success: true,
+    message: `Evento ${event} processado com sucesso`,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Webhook específico para mensagens
 router.post('/webhook/evolution/:instanceName', (req, res) => {
   const { instanceName } = req.params;
   const webhookData = req.body;
@@ -118,11 +141,11 @@ router.get('/instance/fetchInstances', (req, res) => {
         instanceName: instanceName || 'test-evolution-instance',
         instanceId: 'mock-id-123',
         status: 'open',
-        serverUrl: webhookConfig.baseUrl,
+        serverUrl: process.env.WEBHOOK_BASE_URL,
         apikey: 'mock-api-key',
         integration: {
           integration: 'WHATSAPP-BAILEYS',
-          webhook_wa_business: webhookConfig.getWebhookUrl(instanceName || 'test-instance')
+          webhook_wa_business: `${process.env.WEBHOOK_BASE_URL}/webhook/evolution/${instanceName || 'test-instance'}`
         }
       }
     }
@@ -161,9 +184,10 @@ if (process.env.NODE_ENV !== 'test') {
     logger.info('🚀 Servidor Evolution API iniciado');
     logger.info(`📡 Porta: ${PORT}`);
     logger.info('🌐 URLs:');
-    logger.info(`  - API: ${webhookConfig.baseUrl}/api`);
-    logger.info(`  - Health: ${webhookConfig.baseUrl}/api/health`);
-    logger.info(`  - Webhook: ${webhookConfig.getWebhookUrl(':instanceName')}`);
+    logger.info(`  - API: ${process.env.WEBHOOK_BASE_URL}/api`);
+    logger.info(`  - Health: ${process.env.WEBHOOK_BASE_URL}/api/health`);
+    logger.info(`  - Webhook Genérico: ${process.env.WEBHOOK_BASE_URL}/api/:event`);
+    logger.info(`  - Webhook Mensagens: ${process.env.WEBHOOK_BASE_URL}/api/webhook/evolution/:instanceName`);
     logger.info('');
     logger.info('📊 WebSocket disponível');
     logger.info('🔗 CORS configurado');
