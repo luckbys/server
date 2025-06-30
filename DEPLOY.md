@@ -5,10 +5,31 @@
 O erro no Docker build foi corrigido! As principais mudanças:
 
 ### 🔧 Problemas Resolvidos:
-1. **npm ci --only=production** → **npm ci --omit=dev** (comando atualizado)
-2. **Multi-stage build** simplificado para single-stage
-3. **Health check** melhorado com timeouts adequados
-4. **Script de produção** robusto com error handling
+1. **npm ci --omit=dev** → **npm install --only=production** (melhor compatibilidade Docker)
+2. **package.json simplificado** com dependências essenciais apenas
+3. **package-lock.json regenerado** para consistência
+4. **Multi-stage build** simplificado para single-stage
+5. **Health check** melhorado com timeouts adequados
+6. **Script de produção** robusto com error handling
+7. **.dockerignore** otimizado para builds rápidos
+
+## 📦 Dependências Simplificadas
+
+O `package.json` foi otimizado para incluir apenas as dependências essenciais:
+
+```json
+{
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.4", 
+    "cors": "^2.8.5",
+    "winston": "^3.11.0",
+    "axios": "^1.6.7"
+  }
+}
+```
+
+**Removidas**: PostgreSQL, Redis, RabbitMQ, TypeScript e outras dependências complexas para reduzir problemas de build e acelerar deploys.
 
 ## 🐳 Deploy com Docker
 
