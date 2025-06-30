@@ -132,8 +132,8 @@ PORT=3001
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=evolution_webhook
-DB_USER=postgres
-DB_PASSWORD=postgres
+DB_USER=admin
+DB_PASSWORD=superuser
 DB_SSL=false
 
 # Cache
