@@ -10,7 +10,12 @@ const getConfig = (): ServerConfig => {
   return {
     port: parseInt(process.env.PORT || '3001', 10),
     nodeEnv,
-    corsOrigins: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+    corsOrigins: process.env.CORS_ORIGINS?.split(',') || [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://bkcrm.devsible.com.br',
+      'https://webhook.bkcrm.devsible.com.br'
+    ],
     webhookSecret: process.env.WEBHOOK_SECRET,
     
     database: {
