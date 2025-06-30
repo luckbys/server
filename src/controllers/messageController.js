@@ -228,11 +228,18 @@ class MessageController {
     }
   }
   
-  // Marcar como lida
+  // Marcar mensagem como lida (rota compatível Evolution API)
   async markAsRead(req, res) {
     try {
       const { instanceName } = req.params;
       const { messageId } = req.body;
+      
+      if (!messageId) {
+        return res.status(400).json({
+          success: false,
+          error: 'messageId é obrigatório'
+        });
+      }
       
       const result = await evolutionService.markMessageAsRead(instanceName, messageId);
       
@@ -242,6 +249,50 @@ class MessageController {
       });
     } catch (error) {
       logger.error('Erro ao marcar como lida:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+  
+  // Marcar mensagem interna como lida por ID (rota interna)
+  async markMessageAsRead(req, res) {
+    try {
+      const { messageId } = req.params;
+      const { instanceName } = req.body || {};
+      
+      if (!messageId) {
+        return res.status(400).json({
+          success: false,
+          error: 'messageId é obrigatório'
+        });
+      }
+      
+      let targetInstance = instanceName;
+      if (!targetInstance) {
+        try {
+          const messageRecord = await messageService.findById(messageId);
+          if (messageRecord) {
+            targetInstance = messageRecord.instanceName || messageRecord.instance_name;
+          }
+        } catch (err) {}
+      }
+      if (!targetInstance) {
+        return res.status(400).json({
+          success: false,
+          error: 'instanceName não informado e não foi possível determinar a instância'
+        });
+      }
+      
+      const result = await evolutionService.markMessageAsRead(targetInstance, messageId);
+      
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      logger.error('Erro ao marcar mensagem como lida (interno):', error);
       res.status(500).json({
         success: false,
         error: error.message
