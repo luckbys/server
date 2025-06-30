@@ -292,6 +292,134 @@ class StatsController {
       });
     }
   }
+  
+  // Obter logs da instância
+  async getInstanceLogs(req, res) {
+    try {
+      const { instanceName } = req.params;
+      const { page = 1, limit = 50 } = req.query;
+      
+      const logs = await instanceService.getLogs(instanceName, page, limit);
+      
+      res.json({
+        success: true,
+        data: logs
+      });
+    } catch (error) {
+      logger.error('Erro ao obter logs da instância:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Erro interno do servidor'
+      });
+    }
+  }
+  
+  // Obter métricas da instância
+  async getInstanceMetrics(req, res) {
+    try {
+      const { instanceName } = req.params;
+      
+      const metrics = await instanceService.getMetrics(instanceName);
+      
+      res.json({
+        success: true,
+        data: metrics
+      });
+    } catch (error) {
+      logger.error('Erro ao obter métricas da instância:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Erro interno do servidor'
+      });
+    }
+  }
+  
+  // Obter status geral do servidor
+  async getServerStatus(req, res) {
+    try {
+      const serverStatus = {
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        cpu: process.cpuUsage(),
+        timestamp: new Date().toISOString(),
+        version: '2.0.0',
+        environment: process.env.NODE_ENV || 'development',
+        node: process.version,
+        platform: process.platform,
+        arch: process.arch
+      };
+      
+      res.json({
+        success: true,
+        data: serverStatus
+      });
+    } catch (error) {
+      logger.error('Erro ao obter status do servidor:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Erro interno do servidor'
+      });
+    }
+  }
+  
+  // Obter estatísticas de performance
+  async getPerformanceStats(req, res) {
+    try {
+      const [
+        messageStats,
+        ticketStats,
+        instanceStats
+      ] = await Promise.all([
+        messageService.getStats(),
+        ticketService.getStats(),
+        instanceService.getStats()
+      ]);
+      
+      const performanceStats = {
+        messaging: {
+          messagesPerHour: Math.round(messageStats.today / 24),
+          messagesPerDay: messageStats.today,
+          totalMessages: messageStats.total,
+          averageResponseTime: '2.5min', // Isso seria calculado baseado nos dados reais
+          messageTypes: messageStats.byType
+        },
+        tickets: {
+          ticketsPerHour: Math.round(ticketStats.today / 24),
+          ticketsPerDay: ticketStats.today,
+          totalTickets: ticketStats.total,
+          averageResolutionTime: '1h', // Isso seria calculado baseado nos dados reais
+          ticketStatus: {
+            open: ticketStats.open,
+            inProgress: ticketStats.inProgress,
+            closed: ticketStats.closed
+          }
+        },
+        instances: {
+          total: instanceStats.total,
+          connected: instanceStats.connected,
+          error: instanceStats.error,
+          disconnected: instanceStats.disconnected
+        },
+        system: {
+          uptime: process.uptime(),
+          memory: process.memoryUsage(),
+          cpu: process.cpuUsage(),
+          timestamp: new Date().toISOString()
+        }
+      };
+      
+      res.json({
+        success: true,
+        data: performanceStats
+      });
+    } catch (error) {
+      logger.error('Erro ao obter estatísticas de performance:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Erro interno do servidor'
+      });
+    }
+  }
 }
 
 module.exports = new StatsController(); 

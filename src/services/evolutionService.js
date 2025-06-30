@@ -198,7 +198,8 @@ class EvolutionService {
           payload.mediaMessage = {
             media: url,
             caption: caption || '',
-            fileName: fileName
+            type: 'image',
+            fileName: fileName || 'image.jpg'
           };
           break;
           
@@ -207,33 +208,33 @@ class EvolutionService {
           payload.mediaMessage = {
             media: url,
             caption: caption || '',
-            fileName: fileName
+            type: 'video',
+            fileName: fileName || 'video.mp4'
           };
           break;
           
         case 'audio':
           endpoint = 'sendWhatsAppAudio';
-          payload.audioMessage = {
-            audio: url
-          };
+          payload.audio = url;
           break;
           
         case 'document':
           endpoint = 'sendMedia';
           payload.mediaMessage = {
             media: url,
-            fileName: fileName || 'documento',
-            caption: caption || ''
+            caption: caption || '',
+            type: 'document',
+            fileName: fileName || 'document.pdf'
           };
           break;
           
         default:
-          throw new Error('Tipo de mídia não suportado');
+          throw new Error(`Tipo de mídia não suportado: ${type}`);
       }
       
       const response = await this.makeRequest('POST', `/message/${endpoint}/${instanceName}`, payload);
       
-      logger.info('Mensagem de mídia enviada:', {
+      logger.info('Mídia enviada:', {
         instanceName,
         number: formattedNumber,
         type,
@@ -247,7 +248,7 @@ class EvolutionService {
         key: response.data?.key
       };
     } catch (error) {
-      logger.error('Erro ao enviar mensagem de mídia:', {
+      logger.error('Erro ao enviar mídia:', {
         error: error.message,
         instanceName,
         number,
@@ -260,14 +261,14 @@ class EvolutionService {
     }
   }
   
-  // Enviar mensagem de localização
+  // Enviar localização
   async sendLocationMessage(instanceName, number, locationData, options = {}) {
     try {
       const payload = {
         number: this.formatNumber(number),
         locationMessage: {
-          latitude: locationData.latitude,
-          longitude: locationData.longitude,
+          degreesLatitude: locationData.latitude,
+          degreesLongitude: locationData.longitude,
           name: locationData.name || '',
           address: locationData.address || ''
         },
@@ -277,7 +278,7 @@ class EvolutionService {
       
       const response = await this.makeRequest('POST', `/message/sendLocation/${instanceName}`, payload);
       
-      logger.info('Mensagem de localização enviada:', {
+      logger.info('Localização enviada:', {
         instanceName,
         number: payload.number,
         success: !!response.data?.key?.id
@@ -286,32 +287,66 @@ class EvolutionService {
       return {
         success: true,
         data: response.data,
-        messageId: response.data?.key?.id
+        messageId: response.data?.key?.id,
+        key: response.data?.key
       };
     } catch (error) {
       logger.error('Erro ao enviar localização:', {
         error: error.message,
         instanceName,
-        number
+        number,
+        status: error.response?.status,
+        data: error.response?.data
       });
       
       throw new Error(`Falha ao enviar localização: ${error.response?.data?.message || error.message}`);
     }
   }
   
-  // Enviar mensagem com botões
+  // Enviar contato
+  async sendContactMessage(instanceName, number, contact) {
+    try {
+      const payload = {
+        number: this.formatNumber(number),
+        contact
+      };
+      
+      const response = await this.makeRequest('POST', `/message/sendContact/${instanceName}`, payload);
+      
+      logger.info('Contato enviado:', {
+        instanceName,
+        number: payload.number,
+        success: !!response.data?.key?.id
+      });
+      
+      return {
+        success: true,
+        data: response.data,
+        messageId: response.data?.key?.id,
+        key: response.data?.key
+      };
+    } catch (error) {
+      logger.error('Erro ao enviar contato:', {
+        error: error.message,
+        instanceName,
+        number,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      
+      throw new Error(`Falha ao enviar contato: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Enviar botões
   async sendButtonsMessage(instanceName, number, buttonsData, options = {}) {
     try {
       const payload = {
         number: this.formatNumber(number),
-        buttonsMessage: {
-          contentText: buttonsData.text,
-          buttons: buttonsData.buttons.map(btn => ({
-            buttonId: btn.id,
-            buttonText: {
-              displayText: btn.text
-            }
-          }))
+        buttonMessage: {
+          text: buttonsData.text,
+          buttons: buttonsData.buttons,
+          footer: buttonsData.footer || ''
         },
         delay: options.delay || 0,
         quoted: options.quoted
@@ -319,159 +354,79 @@ class EvolutionService {
       
       const response = await this.makeRequest('POST', `/message/sendButtons/${instanceName}`, payload);
       
-      logger.info('Mensagem com botões enviada:', {
+      logger.info('Botões enviados:', {
         instanceName,
         number: payload.number,
-        buttonsCount: buttonsData.buttons.length,
         success: !!response.data?.key?.id
       });
       
       return {
         success: true,
         data: response.data,
-        messageId: response.data?.key?.id
+        messageId: response.data?.key?.id,
+        key: response.data?.key
       };
     } catch (error) {
       logger.error('Erro ao enviar botões:', {
         error: error.message,
         instanceName,
-        number
+        number,
+        status: error.response?.status,
+        data: error.response?.data
       });
       
       throw new Error(`Falha ao enviar botões: ${error.response?.data?.message || error.message}`);
     }
   }
   
-  // Enviar mensagem de lista
+  // Enviar lista
   async sendListMessage(instanceName, number, listData, options = {}) {
     try {
       const payload = {
         number: this.formatNumber(number),
-        listMessage: {
-          title: listData.title,
-          description: listData.description,
-          sections: listData.sections.map(section => ({
-            title: section.title,
-            rows: section.rows.map(row => ({
-              title: row.title,
-              description: row.description || '',
-              rowId: row.id
-            }))
-          }))
-        },
+        listMessage: listData,
         delay: options.delay || 0,
         quoted: options.quoted
       };
       
       const response = await this.makeRequest('POST', `/message/sendList/${instanceName}`, payload);
       
-      logger.info('Mensagem de lista enviada:', {
+      logger.info('Lista enviada:', {
         instanceName,
         number: payload.number,
-        sectionsCount: listData.sections.length,
         success: !!response.data?.key?.id
       });
       
       return {
         success: true,
         data: response.data,
-        messageId: response.data?.key?.id
+        messageId: response.data?.key?.id,
+        key: response.data?.key
       };
     } catch (error) {
       logger.error('Erro ao enviar lista:', {
         error: error.message,
         instanceName,
-        number
+        number,
+        status: error.response?.status,
+        data: error.response?.data
       });
       
       throw new Error(`Falha ao enviar lista: ${error.response?.data?.message || error.message}`);
     }
   }
   
-  // === MÉTODOS DE CONFIGURAÇÃO ===
-  
-  // Configurar webhook
-  async setWebhook(instanceName, webhookData) {
-    try {
-      const response = await this.makeRequest('POST', `/webhook/set/${instanceName}`, webhookData);
-      
-      logger.info('Webhook configurado:', {
-        instanceName,
-        url: webhookData.url,
-        eventsCount: webhookData.events?.length || 0,
-        success: !!response.data?.webhook
-      });
-      
-      return {
-        success: true,
-        data: response.data
-      };
-    } catch (error) {
-      logger.error('Erro ao configurar webhook:', {
-        error: error.message,
-        instanceName,
-        url: webhookData.url
-      });
-      
-      throw new Error(`Falha ao configurar webhook: ${error.response?.data?.message || error.message}`);
-    }
-  }
-  
-  // Obter webhook
-  async getWebhook(instanceName) {
-    try {
-      const response = await this.makeRequest('GET', `/webhook/find/${instanceName}`);
-      
-      return {
-        success: true,
-        data: response.data
-      };
-    } catch (error) {
-      logger.error('Erro ao obter webhook:', {
-        error: error.message,
-        instanceName
-      });
-      
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-  
-  // Configurar settings da instância
-  async setSettings(instanceName, settings) {
-    try {
-      const response = await this.makeRequest('POST', `/settings/set/${instanceName}`, settings);
-      
-      logger.info('Configurações atualizadas:', {
-        instanceName,
-        settings: Object.keys(settings),
-        success: !!response.data?.settings
-      });
-      
-      return {
-        success: true,
-        data: response.data
-      };
-    } catch (error) {
-      logger.error('Erro ao configurar settings:', {
-        error: error.message,
-        instanceName,
-        settings
-      });
-      
-      throw new Error(`Falha ao configurar settings: ${error.response?.data?.message || error.message}`);
-    }
-  }
-  
-  // === MÉTODOS DE CHAT ===
-  
   // Marcar mensagem como lida
   async markMessageAsRead(instanceName, messageKey) {
     try {
       const response = await this.makeRequest('PUT', `/chat/markMessageAsRead/${instanceName}`, {
-        readMessages: [messageKey]
+        messageKey
+      });
+      
+      logger.info('Mensagem marcada como lida:', {
+        instanceName,
+        messageKey,
+        success: !!response.data
       });
       
       return {
@@ -482,22 +437,27 @@ class EvolutionService {
       logger.error('Erro ao marcar mensagem como lida:', {
         error: error.message,
         instanceName,
-        messageKey
+        messageKey,
+        status: error.response?.status
       });
       
-      return {
-        success: false,
-        error: error.message
-      };
+      throw new Error(`Falha ao marcar mensagem como lida: ${error.response?.data?.message || error.message}`);
     }
   }
   
-  // Definir presença (digitando, online, etc)
+  // Definir presença
   async setPresence(instanceName, jid, presence) {
     try {
       const response = await this.makeRequest('PUT', `/chat/presence/${instanceName}`, {
-        number: this.formatNumber(jid),
-        presence: presence // 'unavailable', 'available', 'composing', 'recording', 'paused'
+        jid,
+        presence
+      });
+      
+      logger.info('Presença definida:', {
+        instanceName,
+        jid,
+        presence,
+        success: !!response.data
       });
       
       return {
@@ -509,117 +469,434 @@ class EvolutionService {
         error: error.message,
         instanceName,
         jid,
-        presence
+        presence,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao definir presença: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Verificar números WhatsApp
+  async checkWhatsAppNumbers(instanceName, numbers) {
+    try {
+      const response = await this.makeRequest('POST', `/chat/whatsappNumbers/${instanceName}`, {
+        numbers: Array.isArray(numbers) ? numbers : [numbers]
       });
       
       return {
-        success: false,
-        error: error.message
+        success: true,
+        data: response.data
       };
+    } catch (error) {
+      logger.error('Erro ao verificar números:', {
+        error: error.message,
+        instanceName,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao verificar números: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Buscar mensagens
+  async findMessages(instanceName, chatId, count = 50) {
+    try {
+      const response = await this.makeRequest('GET', `/chat/findMessages/${instanceName}`, {
+        params: { chatId, count }
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao buscar mensagens:', {
+        error: error.message,
+        instanceName,
+        chatId,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao buscar mensagens: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Criar grupo
+  async createGroup(instanceName, name, participants) {
+    try {
+      const response = await this.makeRequest('POST', `/group/create/${instanceName}`, {
+        name,
+        participants: Array.isArray(participants) ? participants : [participants]
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao criar grupo:', {
+        error: error.message,
+        instanceName,
+        name,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao criar grupo: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Atualizar grupo
+  async updateGroup(instanceName, groupId, updateData) {
+    try {
+      const response = await this.makeRequest('PUT', `/group/updateGroupInfo/${instanceName}`, {
+        groupId,
+        ...updateData
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao atualizar grupo:', {
+        error: error.message,
+        instanceName,
+        groupId,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao atualizar grupo: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Atualizar participantes do grupo
+  async updateGroupParticipants(instanceName, groupId, updateData) {
+    try {
+      const response = await this.makeRequest('PUT', `/group/participants/${instanceName}`, {
+        groupId,
+        ...updateData
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao atualizar participantes:', {
+        error: error.message,
+        instanceName,
+        groupId,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao atualizar participantes: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Sair do grupo
+  async leaveGroup(instanceName, groupId) {
+    try {
+      const response = await this.makeRequest('DELETE', `/group/leaveGroup/${instanceName}`, {
+        groupId
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao sair do grupo:', {
+        error: error.message,
+        instanceName,
+        groupId,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao sair do grupo: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Buscar perfil
+  async findProfile(instanceName, number) {
+    try {
+      const response = await this.makeRequest('GET', `/chat/findProfile/${instanceName}`, {
+        params: { number: this.formatNumber(number) }
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao buscar perfil:', {
+        error: error.message,
+        instanceName,
+        number,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao buscar perfil: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Atualizar nome do perfil
+  async updateProfileName(instanceName, name) {
+    try {
+      const response = await this.makeRequest('PUT', `/chat/updateProfileName/${instanceName}`, {
+        name
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao atualizar nome do perfil:', {
+        error: error.message,
+        instanceName,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao atualizar nome do perfil: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Atualizar status do perfil
+  async updateProfileStatus(instanceName, status) {
+    try {
+      const response = await this.makeRequest('PUT', `/chat/updateProfileStatus/${instanceName}`, {
+        status
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao atualizar status do perfil:', {
+        error: error.message,
+        instanceName,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao atualizar status do perfil: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Atualizar foto do perfil
+  async updateProfilePicture(instanceName, imageUrl) {
+    try {
+      const response = await this.makeRequest('PUT', `/chat/updateProfilePicture/${instanceName}`, {
+        imageUrl
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao atualizar foto do perfil:', {
+        error: error.message,
+        instanceName,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao atualizar foto do perfil: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Validar número WhatsApp
+  async validateNumber(number) {
+    try {
+      const response = await this.makeRequest('POST', '/utils/validate-number', {
+        number: this.formatNumber(number)
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao validar número:', {
+        error: error.message,
+        number,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao validar número: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Download de mídia
+  async downloadMedia(mediaId) {
+    try {
+      const response = await this.makeRequest('GET', `/media/download/${mediaId}`);
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao fazer download da mídia:', {
+        error: error.message,
+        mediaId,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao fazer download da mídia: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Upload de mídia
+  async uploadMedia(file) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await this.makeRequest('POST', '/media/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Erro ao fazer upload da mídia:', {
+        error: error.message,
+        fileName: file.name,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao fazer upload da mídia: ${error.response?.data?.message || error.message}`);
+    }
+  }
+  
+  // Mensagens do ticket
+  async getTicketMessages(ticketId, page = 1, limit = 50) {
+    try {
+      const response = await this.makeRequest('GET', `/messages/ticket/${ticketId}`, {
+        params: { page, limit }
+      });
+      
+      return {
+        success: true,
+        data: response.data.data,
+        pagination: {
+          page,
+          limit,
+          total: response.data.total,
+          pages: Math.ceil(response.data.total / limit)
+        }
+      };
+    } catch (error) {
+      logger.error('Erro ao listar mensagens do ticket:', {
+        error: error.message,
+        ticketId,
+        status: error.response?.status
+      });
+      
+      throw new Error(`Falha ao listar mensagens do ticket: ${error.response?.data?.message || error.message}`);
     }
   }
   
   // === MÉTODOS AUXILIARES ===
   
-  // Fazer requisição HTTP com retry
+  // Fazer requisição com retry
   async makeRequest(method, endpoint, data = null, retryCount = 0) {
     try {
-      const instance = await this.getInstanceConfig();
-      const config = {
+      const config = await this.getInstanceConfig();
+      
+      const response = await axios({
         method,
-        url: `${instance.apiUrl}${endpoint}`,
+        url: `${config.baseUrl}${endpoint}`,
+        data,
         headers: {
-          'apikey': instance.apiKey,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'apikey': config.apiKey
         },
         timeout: this.defaultTimeout
-      };
+      });
       
-      if (data && (method === 'POST' || method === 'PUT')) {
-        config.data = data;
-      }
-      
-      const response = await axios(config);
       return response;
-      
     } catch (error) {
-      if (retryCount < this.retryAttempts && this.shouldRetry(error)) {
-        logger.warn(`Tentativa ${retryCount + 1}/${this.retryAttempts} falhou, tentando novamente...`, {
-          endpoint,
-          error: error.message
-        });
-        
+      if (this.shouldRetry(error) && retryCount < this.retryAttempts) {
         await this.delay(this.retryDelay * (retryCount + 1));
         return this.makeRequest(method, endpoint, data, retryCount + 1);
       }
-      
       throw error;
     }
   }
   
-  // Verificar se deve fazer retry
+  // Verificar se deve tentar novamente
   shouldRetry(error) {
-    const retryStatuses = [408, 429, 500, 502, 503, 504];
-    return error.code === 'ECONNRESET' || 
-           error.code === 'ETIMEDOUT' || 
-           retryStatuses.includes(error.response?.status);
+    return (
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ETIMEDOUT' ||
+      error.response?.status >= 500
+    );
   }
   
-  // Delay para retry
+  // Aguardar delay
   async delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
   
-  // Obter configuração da instância padrão
+  // Obter configuração da instância
   async getInstanceConfig() {
-    // Por enquanto, usar configuração padrão
-    // Em produção, isso deveria vir do banco de dados
     return {
-      apiUrl: process.env.EVOLUTION_API_URL || 'http://localhost:8080',
-      apiKey: process.env.EVOLUTION_API_KEY || 'default-key'
+      baseUrl: process.env.EVOLUTION_API_URL || 'http://localhost:8080',
+      apiKey: process.env.EVOLUTION_API_KEY || 'your-api-key'
     };
   }
   
-  // Formatar número para padrão WhatsApp
+  // Formatar número
   formatNumber(number) {
-    // Remove caracteres não numéricos
-    const cleaned = number.replace(/\D/g, '');
+    // Remover caracteres não numéricos
+    let cleaned = number.replace(/\D/g, '');
     
-    // Se não termina com @s.whatsapp.net, adiciona
-    if (!number.includes('@')) {
-      return `${cleaned}@s.whatsapp.net`;
+    // Adicionar prefixo do país se não tiver
+    if (!cleaned.startsWith('55')) {
+      cleaned = '55' + cleaned;
     }
     
-    return number;
+    // Adicionar sufixo @s.whatsapp.net se não tiver
+    if (!cleaned.endsWith('@s.whatsapp.net') && !cleaned.endsWith('@g.us')) {
+      cleaned = cleaned + '@s.whatsapp.net';
+    }
+    
+    return cleaned;
   }
   
-  // Validar instância antes de fazer requests
+  // Validar instância
   async validateInstance(instanceName) {
     try {
-      const statusResponse = await this.getInstanceStatus(instanceName);
+      const status = await this.getInstanceStatus(instanceName);
       
-      if (!statusResponse.success) {
+      if (!status.success) {
         return {
           valid: false,
-          error: 'Instância não encontrada ou erro de comunicação'
+          error: 'Instância não encontrada'
         };
       }
       
-      if (statusResponse.state !== 'open') {
+      if (status.state !== 'open') {
         return {
           valid: false,
-          error: `Instância não conectada. Status: ${statusResponse.state}`
+          error: 'Instância não está conectada'
         };
       }
       
       return {
-        valid: true,
-        status: statusResponse.state
+        valid: true
       };
     } catch (error) {
       return {
         valid: false,
-        error: `Erro ao validar instância: ${error.message}`
+        error: error.message
       };
     }
   }

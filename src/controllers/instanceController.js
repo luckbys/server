@@ -698,21 +698,28 @@ class InstanceController {
   async startTypebot(req, res) {
     try {
       const { instanceName } = req.params;
-      const { typebot, session, remoteJid } = req.body;
+      const { url, keyword, expire } = req.body;
       
-      logger.info('Iniciando Typebot:', { instanceName, typebot, session });
+      logger.info('Iniciando Typebot:', { instanceName, url, keyword, expire });
       
-      // Implementar lógica do Typebot aqui
-      // Por enquanto, apenas registrar
+      // Atualizar no banco local
+      await instanceService.updateIntegration(instanceName, {
+        typebot_enabled: true,
+        typebot_url: url,
+        typebot_keyword: keyword,
+        typebot_expire: expire
+      });
       
       res.json({
         success: true,
-        message: 'Typebot iniciado',
-        data: { instanceName, typebot, session, remoteJid }
+        message: 'Typebot configurado com sucesso'
+      });
+    } catch (error) {
+      logger.error('Erro ao configurar Typebot:', {
+        error: error.message,
+        instanceName: req.params.instanceName
       });
       
-    } catch (error) {
-      logger.error('Erro ao iniciar Typebot:', error);
       res.status(500).json({
         success: false,
         error: error.message
@@ -724,18 +731,25 @@ class InstanceController {
   async changeTypebotStatus(req, res) {
     try {
       const { instanceName } = req.params;
-      const { status, session, remoteJid } = req.body;
+      const { enabled } = req.body;
       
-      logger.info('Alterando status do Typebot:', { instanceName, status, session });
+      logger.info('Alterando status do Typebot:', { instanceName, enabled });
+      
+      // Atualizar no banco local
+      await instanceService.updateIntegration(instanceName, {
+        typebot_enabled: enabled
+      });
       
       res.json({
         success: true,
-        message: 'Status do Typebot alterado',
-        data: { instanceName, status, session, remoteJid }
+        message: `Typebot ${enabled ? 'ativado' : 'desativado'} com sucesso`
+      });
+    } catch (error) {
+      logger.error('Erro ao alterar status do Typebot:', {
+        error: error.message,
+        instanceName: req.params.instanceName
       });
       
-    } catch (error) {
-      logger.error('Erro ao alterar status do Typebot:', error);
       res.status(500).json({
         success: false,
         error: error.message
@@ -747,20 +761,28 @@ class InstanceController {
   async setupChatwoot(req, res) {
     try {
       const { instanceName } = req.params;
-      const chatwootConfig = req.body;
+      const { url, token, inbox_id } = req.body;
       
       logger.info('Configurando Chatwoot:', { instanceName });
       
-      await instanceService.updateIntegration(instanceName, 'chatwoot', chatwootConfig);
+      // Atualizar no banco local
+      await instanceService.updateIntegration(instanceName, {
+        chatwoot_enabled: true,
+        chatwoot_url: url,
+        chatwoot_token: token,
+        chatwoot_inbox_id: inbox_id
+      });
       
       res.json({
         success: true,
-        message: 'Chatwoot configurado com sucesso',
-        data: { instanceName, config: chatwootConfig }
+        message: 'Chatwoot configurado com sucesso'
+      });
+    } catch (error) {
+      logger.error('Erro ao configurar Chatwoot:', {
+        error: error.message,
+        instanceName: req.params.instanceName
       });
       
-    } catch (error) {
-      logger.error('Erro ao configurar Chatwoot:', error);
       res.status(500).json({
         success: false,
         error: error.message
@@ -773,19 +795,34 @@ class InstanceController {
     try {
       const { instanceName } = req.params;
       
+      // Buscar instância
       const instance = await instanceService.findByName(instanceName);
+      if (!instance) {
+        return res.status(404).json({
+          success: false,
+          error: 'Instância não encontrada'
+        });
+      }
+      
+      // Verificar configuração do Chatwoot
+      const chatwootConfig = instance.integrations?.chatwoot || {};
       
       res.json({
         success: true,
         data: {
-          instanceName,
-          chatwoot: instance?.integrations?.chatwoot || {},
-          enabled: !!instance?.integrations?.chatwoot_enabled
+          enabled: !!chatwootConfig.chatwoot_enabled,
+          url: chatwootConfig.chatwoot_url || null,
+          inbox_id: chatwootConfig.chatwoot_inbox_id || null,
+          connected: !!chatwootConfig.chatwoot_enabled && !!chatwootConfig.chatwoot_url
         }
       });
       
     } catch (error) {
-      logger.error('Erro ao obter status do Chatwoot:', error);
+      logger.error('Erro ao obter status do Chatwoot:', {
+        error: error.message,
+        instanceName: req.params.instanceName
+      });
+      
       res.status(500).json({
         success: false,
         error: error.message
@@ -797,17 +834,25 @@ class InstanceController {
   async setupRabbitMQ(req, res) {
     try {
       const { instanceName } = req.params;
-      const rabbitmqConfig = req.body;
+      const { url, queue } = req.body;
       
-      await instanceService.updateIntegration(instanceName, 'rabbitmq', rabbitmqConfig);
+      // Atualizar no banco local
+      await instanceService.updateIntegration(instanceName, {
+        rabbitmq_enabled: true,
+        rabbitmq_url: url,
+        rabbitmq_queue: queue
+      });
       
       res.json({
         success: true,
         message: 'RabbitMQ configurado com sucesso'
       });
-      
     } catch (error) {
-      logger.error('Erro ao configurar RabbitMQ:', error);
+      logger.error('Erro ao configurar RabbitMQ:', {
+        error: error.message,
+        instanceName: req.params.instanceName
+      });
+      
       res.status(500).json({
         success: false,
         error: error.message
@@ -819,17 +864,27 @@ class InstanceController {
   async setupSQS(req, res) {
     try {
       const { instanceName } = req.params;
-      const sqsConfig = req.body;
+      const { queue_url, region, access_key, secret_key } = req.body;
       
-      await instanceService.updateIntegration(instanceName, 'sqs', sqsConfig);
+      // Atualizar no banco local
+      await instanceService.updateIntegration(instanceName, {
+        sqs_enabled: true,
+        sqs_queue_url: queue_url,
+        sqs_region: region,
+        sqs_access_key: access_key,
+        sqs_secret_key: secret_key
+      });
       
       res.json({
         success: true,
         message: 'SQS configurado com sucesso'
       });
-      
     } catch (error) {
-      logger.error('Erro ao configurar SQS:', error);
+      logger.error('Erro ao configurar SQS:', {
+        error: error.message,
+        instanceName: req.params.instanceName
+      });
+      
       res.status(500).json({
         success: false,
         error: error.message
@@ -841,17 +896,23 @@ class InstanceController {
   async setupWebSocket(req, res) {
     try {
       const { instanceName } = req.params;
-      const wsConfig = req.body;
+      const { enabled } = req.body;
       
-      await instanceService.updateIntegration(instanceName, 'websocket', wsConfig);
+      // Atualizar no banco local
+      await instanceService.updateIntegration(instanceName, {
+        websocket_enabled: enabled
+      });
       
       res.json({
         success: true,
-        message: 'WebSocket configurado com sucesso'
+        message: `WebSocket ${enabled ? 'ativado' : 'desativado'} com sucesso`
+      });
+    } catch (error) {
+      logger.error('Erro ao configurar WebSocket:', {
+        error: error.message,
+        instanceName: req.params.instanceName
       });
       
-    } catch (error) {
-      logger.error('Erro ao configurar WebSocket:', error);
       res.status(500).json({
         success: false,
         error: error.message
