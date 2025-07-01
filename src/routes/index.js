@@ -9,6 +9,7 @@ const statsController = require('../controllers/statsController');
 
 // Middlewares
 const { webhookLimiter, verifyWebhookSignature } = require('../middleware/security');
+const { validateWebhook } = require('../config/validation');
 
 // === ROUTES COMPATÍVEIS COM EVOLUTION API ===
 
@@ -282,6 +283,41 @@ router.use('*', (req, res) => {
       docs: 'GET /api/'
     }
   });
+});
+
+// Rotas de saúde e status
+router.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+router.get('/stats', statsController.getStats);
+
+// Rotas de webhook no formato antigo
+router.post('/webhook/evolution/:instanceName', validateWebhook, webhookController.handleEvolutionWebhook);
+router.post('/:event', validateWebhook, webhookController.handleGenericWebhook);
+
+// Novas rotas compatíveis com Evolution API
+router.post('/messages-upsert', validateWebhook, (req, res) => {
+    req.params.event = 'messages.upsert';
+    webhookController.handleEvolutionWebhook(req, res);
+});
+
+router.post('/connection-update', validateWebhook, (req, res) => {
+    req.params.event = 'connection.update';
+    webhookController.handleEvolutionWebhook(req, res);
+});
+
+router.post('/contacts-update', validateWebhook, (req, res) => {
+    req.params.event = 'contacts.update';
+    webhookController.handleEvolutionWebhook(req, res);
+});
+
+router.post('/chats-update', validateWebhook, (req, res) => {
+    req.params.event = 'chats.update';
+    webhookController.handleEvolutionWebhook(req, res);
+});
+
+// Rota de fallback para outros eventos
+router.post('/:eventName', validateWebhook, (req, res) => {
+    req.params.event = req.params.eventName.replace('-', '.');
+    webhookController.handleEvolutionWebhook(req, res);
 });
 
 module.exports = router; 
