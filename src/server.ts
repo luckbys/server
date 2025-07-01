@@ -7,7 +7,13 @@ import compression from 'compression';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 
 import config from './config';
-import logger from './utils/logger';
+import logger, { 
+  logSystemStatus, 
+  logUserAction, 
+  logEvolutionApi,
+  logWhatsAppStatus,
+  logError
+} from './utils/logger';
 import db from './database/connection';
 import cache from './services/cache';
 import queue from './services/queue';
@@ -70,7 +76,7 @@ class EvolutionWebhookServer {
         await this.rateLimiter.consume(req.ip || 'unknown');
         next();
       } catch (rateLimiterRes) {
-        logger.warn('🚫 Rate limit excedido', {
+        logger.warn('🚫 Taxa limite excedida! Pedindo para o cliente aguardar um pouco...', {
           requestId: req.id,
           ip: req.ip,
           path: req.path,
@@ -79,7 +85,7 @@ class EvolutionWebhookServer {
 
         res.status(429).json({
           success: false,
-          message: 'Rate limit excedido',
+          message: 'Muitas requisições! Por favor, aguarde um momento antes de tentar novamente.',
           retryAfter: Math.round(rateLimiterRes.msBeforeNext / 1000) || 1,
         });
       }
@@ -131,9 +137,15 @@ class EvolutionWebhookServer {
 
     // 404 handler
     this.app.use('*', (req: express.Request, res: express.Response) => {
+      logger.warn('🔍 Rota não encontrada', {
+        requestId: req.id,
+        path: req.originalUrl,
+        method: req.method
+      });
+
       res.status(404).json({
         success: false,
-        message: 'Endpoint não encontrado',
+        message: 'Ops! Essa rota não existe em nosso servidor.',
         path: req.originalUrl
       });
     });
@@ -141,21 +153,30 @@ class EvolutionWebhookServer {
 
   private setupWebSocket(): void {
     this.io.on('connection', (socket) => {
-      logger.info('🔌 Cliente WebSocket conectado', { socketId: socket.id });
+      logger.info('🔌 Novo cliente conectado ao WebSocket!', { 
+        socketId: socket.id,
+        userAgent: socket.handshake.headers['user-agent']
+      });
 
       socket.on('disconnect', () => {
-        logger.info('🔌 Cliente WebSocket desconectado', { socketId: socket.id });
+        logger.info('👋 Cliente WebSocket desconectou', { 
+          socketId: socket.id 
+        });
       });
 
       // Eventos personalizados
       socket.on('join-instance', (instanceName: string) => {
         socket.join(`instance:${instanceName}`);
-        logger.debug(`📡 Cliente joined instance: ${instanceName}`, { socketId: socket.id });
+        logger.debug(`📡 Cliente entrou na sala da instância: ${instanceName}`, { 
+          socketId: socket.id 
+        });
       });
 
       socket.on('leave-instance', (instanceName: string) => {
         socket.leave(`instance:${instanceName}`);
-        logger.debug(`📡 Cliente left instance: ${instanceName}`, { socketId: socket.id });
+        logger.debug(`📡 Cliente saiu da sala da instância: ${instanceName}`, { 
+          socketId: socket.id 
+        });
       });
     });
   }
@@ -168,32 +189,34 @@ class EvolutionWebhookServer {
       res: express.Response,
       next: express.NextFunction
     ) => {
-      logger.error('💥 Erro não tratado:', error);
+      logError(error, 'Erro não tratado no servidor', req);
       
       res.status(500).json({
         success: false,
-        message: config.nodeEnv === 'production' ? 'Erro interno do servidor' : error.message,
+        message: config.nodeEnv === 'production' 
+          ? 'Ops! Tivemos um problema interno. Nossa equipe já foi notificada!' 
+          : error.message,
         timestamp: new Date().toISOString()
       });
     });
 
     // Handlers de processo
     process.on('uncaughtException', (error: Error) => {
-      logger.error('💥 Uncaught Exception:', error);
+      logError(error, 'Exceção não capturada');
       this.gracefulShutdown();
     });
 
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-      logger.error('💥 Unhandled Rejection at:', { promise, reason });
+      logError(new Error(reason?.message || 'Unknown error'), 'Promessa rejeitada não tratada');
     });
 
     process.on('SIGTERM', () => {
-      logger.info('📤 SIGTERM recebido, iniciando shutdown graceful...');
+      logSystemStatus('shutdown', { reason: 'SIGTERM' });
       this.gracefulShutdown();
     });
 
     process.on('SIGINT', () => {
-      logger.info('📤 SIGINT recebido, iniciando shutdown graceful...');
+      logSystemStatus('shutdown', { reason: 'SIGINT' });
       this.gracefulShutdown();
     });
   }
@@ -202,21 +225,21 @@ class EvolutionWebhookServer {
     // Consumer para mensagens
     await queue.startMessageConsumer(async (payload: MessageQueuePayload) => {
       try {
-        logger.info('📥 Processando mensagem da fila', {
+        logger.info('📬 Nova mensagem recebida na fila para processamento', {
           id: payload.id,
           eventType: payload.eventType,
           instanceName: payload.instanceName
         });
 
-        // Processar mensagem (implementar lógica específica)
+        // Processar mensagem
         await this.processMessage(payload);
 
-        // Emitir via WebSocket
-        this.io.to(`instance:${payload.instanceName}`).emit('message', payload);
-        
+        logger.info('✨ Mensagem processada com sucesso!', {
+          id: payload.id,
+          eventType: payload.eventType
+        });
       } catch (error) {
-        logger.error('❌ Erro ao processar mensagem da fila:', error);
-        throw error; // Re-throw para rejeitar a mensagem
+        logError(error as Error, 'Falha ao processar mensagem da fila', undefined);
       }
     });
 
@@ -256,84 +279,68 @@ class EvolutionWebhookServer {
 
   public async start(): Promise<void> {
     try {
-      logger.info('🚀 Iniciando Evolution Webhook Server (Scalable)...');
+      logSystemStatus('startup');
 
-      // Conectar aos serviços
-      logger.info('🔌 Conectando aos serviços...');
-      
-      // Testar conexão com banco
-      const dbConnected = await db.testConnection();
-      if (!dbConnected) {
-        throw new Error('Falha ao conectar com PostgreSQL');
-      }
+      // Conectar ao banco
+      await db.connect();
+      logger.info('📦 Conectado ao banco de dados PostgreSQL');
 
-      // Executar migrations
+      // Rodar migrações
       await runMigrations();
+      logger.info('🔄 Migrações do banco aplicadas com sucesso');
 
-      // Conectar Redis (opcional em desenvolvimento)
-      try {
-        await cache.connect();
-      } catch (error) {
-        logger.warn('⚠️ Redis não disponível (modo desenvolvimento):', error);
-      }
+      // Conectar ao Redis
+      await cache.connect();
+      logger.info('⚡ Conectado ao Redis');
 
-      // Conectar RabbitMQ (opcional em desenvolvimento)
-      try {
-        await queue.connect();
-        await this.setupQueueConsumers();
-      } catch (error) {
-        logger.warn('⚠️ RabbitMQ não disponível (modo desenvolvimento):', error);
-      }
+      // Conectar ao RabbitMQ
+      await queue.connect();
+      logger.info('🐰 Conectado ao RabbitMQ');
 
-      // Iniciar servidor
+      // Iniciar consumers
+      await this.setupQueueConsumers();
+      logger.info('📥 Consumidores de fila iniciados');
+
+      // Iniciar servidor HTTP
       this.server.listen(config.port, () => {
-        logger.info('✅ Servidor iniciado com sucesso!');
-        logger.info(`📡 Porta: ${config.port}`);
-        logger.info(`🌍 Ambiente: ${config.nodeEnv}`);
-        logger.info('🌐 URLs:');
-        logger.info(`  - API: http://localhost:${config.port}/api`);
-        logger.info(`  - Health: http://localhost:${config.port}/api/health`);
-        logger.info(`  - Stats: http://localhost:${config.port}/api/stats`);
-        logger.info(`  - Webhook: http://localhost:${config.port}/api/webhook/evolution/:instanceName`);
-        logger.info('');
-        logger.info('🎯 Recursos habilitados:');
-        logger.info('  ✅ PostgreSQL (Persistência)');
-        logger.info('  ✅ WebSocket (Tempo real)');
-        logger.info('  ✅ Rate Limiting (Segurança)');
-        logger.info('  ✅ CORS (Cross-origin)');
-        logger.info('  ✅ Helmet (Segurança)');
-        logger.info('  ✅ Compressão (Performance)');
-        if (cache.isConnected()) {
-          logger.info('  ✅ Redis (Cache)');
-        }
-        if (queue.isConnected()) {
-          logger.info('  ✅ RabbitMQ (Filas)');
-        }
+        logSystemStatus('ready', { 
+          port: config.port,
+          environment: config.nodeEnv
+        });
       });
-
     } catch (error) {
-      logger.error('💥 Falha ao iniciar servidor:', error);
+      logError(error as Error, 'Falha ao iniciar servidor');
       process.exit(1);
     }
   }
 
   private async gracefulShutdown(): Promise<void> {
-    logger.info('🔄 Iniciando shutdown graceful...');
+    try {
+      // Parar de aceitar novas conexões
+      this.server.close();
+      logger.info('🛑 Servidor HTTP parado');
 
-    // Fechar servidor HTTP
-    this.server.close(() => {
-      logger.info('🔌 Servidor HTTP fechado');
-    });
+      // Desconectar WebSocket
+      this.io.close();
+      logger.info('🔌 Conexões WebSocket encerradas');
 
-    // Fechar conexões
-    await Promise.all([
-      db.close(),
-      cache.disconnect(),
-      queue.disconnect()
-    ]);
+      // Desconectar do banco
+      await db.disconnect();
+      logger.info('📦 Desconectado do banco de dados');
 
-    logger.info('✅ Shutdown concluído');
-    process.exit(0);
+      // Desconectar do Redis
+      await cache.disconnect();
+      logger.info('⚡ Desconectado do Redis');
+
+      // Desconectar do RabbitMQ
+      await queue.disconnect();
+      logger.info('🐰 Desconectado do RabbitMQ');
+
+      process.exit(0);
+    } catch (error) {
+      logError(error as Error, 'Erro durante shutdown');
+      process.exit(1);
+    }
   }
 
   public getApp(): express.Application {

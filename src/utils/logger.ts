@@ -28,6 +28,74 @@ const LOG_LEVELS = {
   silly: 6     // Logs extremamente detalhados
 };
 
+// Emojis para diferentes tipos de eventos
+const EVENT_EMOJIS = {
+  // Status do Sistema
+  startup: '🚀',
+  shutdown: '🛑',
+  ready: '✨',
+  
+  // Conexões
+  connected: '🔌',
+  disconnected: '🔍',
+  reconnecting: '🔄',
+  
+  // Mensagens
+  messageReceived: '📥',
+  messageSent: '📤',
+  messageError: '📨❌',
+  messageQueued: '📬',
+  messageProcessed: '✅',
+  
+  // Webhooks
+  webhookReceived: '🎣',
+  webhookSent: '🎯',
+  webhookError: '🎣❌',
+  webhookRetry: '🔁',
+  
+  // Database
+  dbQuery: '🗃️',
+  dbSuccess: '💾',
+  dbError: '💽❌',
+  dbMigration: '📦',
+  
+  // Cache
+  cacheHit: '⚡',
+  cacheMiss: '🔍',
+  cacheUpdate: '🔄',
+  
+  // Segurança
+  authSuccess: '🔐',
+  authError: '🚫',
+  rateLimit: '⚠️',
+  
+  // Performance
+  slowOperation: '🐢',
+  fastOperation: '🚄',
+  optimization: '⚡',
+  
+  // Integrações
+  whatsappStatus: '📱',
+  evolutionApi: '🤖',
+  rabbitmq: '🐰',
+  redis: '📦',
+  
+  // Erros e Avisos
+  error: '💥',
+  warning: '⚠️',
+  critical: '🚨',
+  
+  // Usuários
+  userAction: '👤',
+  adminAction: '👑',
+  
+  // Outros
+  success: '✅',
+  failed: '❌',
+  pending: '⏳',
+  scheduled: '📅'
+};
+
 // Formatos personalizados
 const formats = {
   // Formato base com timestamp e nível
@@ -36,15 +104,15 @@ const formats = {
     winston.format.errors({ stack: true })
   ),
 
-  // Formato para console com cores
+  // Formato para console com cores e emojis
   console: winston.format.printf(({ level, message, timestamp, stack, ...metadata }) => {
     const metaString = Object.keys(metadata).length ? 
       `\n${JSON.stringify(metadata, null, 2)}` : '';
     
     const emoji = {
-      error: '❌',
-      warn: '⚠️',
-      info: 'ℹ️',
+      error: EVENT_EMOJIS.error,
+      warn: EVENT_EMOJIS.warning,
+      info: EVENT_EMOJIS.success,
       http: '🌐',
       verbose: '📝',
       debug: '🔍',
@@ -167,7 +235,7 @@ export const logWebhook = (event: string, instanceName: string, data: any, req?:
     timestamp: new Date().toISOString()
   };
 
-  logger.info('📨 Webhook recebido', metadata);
+  logger.info(`${EVENT_EMOJIS.webhookReceived} Novo webhook recebido da Evolution API! Evento: ${event}`, metadata);
 };
 
 export const logMessage = (messageData: any, req?: Request) => {
@@ -179,7 +247,7 @@ export const logMessage = (messageData: any, req?: Request) => {
     timestamp: messageData.timestamp
   };
 
-  logger.info('💬 Mensagem processada', metadata);
+  logger.info(`${EVENT_EMOJIS.messageReceived} Nova mensagem chegou no WhatsApp! Tipo: ${messageData.messageType}`, metadata);
 };
 
 export const logError = (error: Error, context?: string, req?: Request) => {
@@ -192,7 +260,7 @@ export const logError = (error: Error, context?: string, req?: Request) => {
     systemInfo: getSystemInfo()
   };
 
-  logger.error(`❌ Erro${context ? ` em ${context}` : ''}`, metadata);
+  logger.error(`${EVENT_EMOJIS.error} Ops! Encontramos um problema${context ? ` em ${context}` : ''}`, metadata);
 };
 
 export const logDatabase = (operation: string, table: string, result: any, duration: number, req?: Request) => {
@@ -205,7 +273,10 @@ export const logDatabase = (operation: string, table: string, result: any, durat
     affectedRows: result?.rowCount || 0
   };
 
-  logger.debug('🗄️ Operação no banco', metadata);
+  const emoji = result ? EVENT_EMOJIS.dbSuccess : EVENT_EMOJIS.dbError;
+  const speed = duration < 100 ? EVENT_EMOJIS.fastOperation : EVENT_EMOJIS.slowOperation;
+
+  logger.debug(`${emoji} Operação no banco de dados ${result ? 'concluída' : 'falhou'} ${speed} (${duration}ms)`, metadata);
 };
 
 export const logQueue = (operation: string, queue: string, messageId: string, metadata: any = {}, req?: Request) => {
@@ -217,7 +288,7 @@ export const logQueue = (operation: string, queue: string, messageId: string, me
     ...metadata
   };
 
-  logger.debug('📥 Operação na fila', logMetadata);
+  logger.debug(`${EVENT_EMOJIS.rabbitmq} Mensagem ${operation === 'send' ? 'enviada para' : 'recebida da'} fila ${queue}`, logMetadata);
 };
 
 export const logPerformance = (context: string, duration: number, metadata: any = {}, req?: Request) => {
@@ -229,7 +300,8 @@ export const logPerformance = (context: string, duration: number, metadata: any 
     systemInfo: getSystemInfo()
   };
 
-  logger.verbose('⚡ Métrica de performance', logMetadata);
+  const emoji = duration < 100 ? EVENT_EMOJIS.fastOperation : EVENT_EMOJIS.slowOperation;
+  logger.verbose(`${emoji} Performance medida em ${context}: ${duration}ms`, logMetadata);
 };
 
 export const logSecurity = (event: string, metadata: any = {}, req?: Request) => {
@@ -239,7 +311,8 @@ export const logSecurity = (event: string, metadata: any = {}, req?: Request) =>
     ...metadata
   };
 
-  logger.warn('🔒 Evento de segurança', logMetadata);
+  const emoji = event.includes('success') ? EVENT_EMOJIS.authSuccess : EVENT_EMOJIS.authError;
+  logger.warn(`${emoji} Evento de segurança: ${event}`, logMetadata);
 };
 
 export const logWebhookError = (error: Error, webhookData: any, req?: Request) => {
@@ -254,7 +327,35 @@ export const logWebhookError = (error: Error, webhookData: any, req?: Request) =
     systemInfo: getSystemInfo()
   };
 
-  logger.error('❌ Erro no webhook', metadata);
+  const retryEmoji = webhookData?.retryCount ? EVENT_EMOJIS.webhookRetry : EVENT_EMOJIS.webhookError;
+  logger.error(`${retryEmoji} Falha ao processar webhook ${webhookData?.retryCount ? `(Tentativa ${webhookData.retryCount})` : ''}`, metadata);
+};
+
+export const logWhatsAppStatus = (status: string, instanceName: string, metadata: any = {}) => {
+  logger.info(`${EVENT_EMOJIS.whatsappStatus} Status do WhatsApp atualizado: ${status} (${instanceName})`, metadata);
+};
+
+export const logEvolutionApi = (action: string, result: string, metadata: any = {}) => {
+  const emoji = result === 'success' ? EVENT_EMOJIS.success : EVENT_EMOJIS.failed;
+  logger.info(`${EVENT_EMOJIS.evolutionApi} Evolution API: ${action} ${emoji}`, metadata);
+};
+
+export const logUserAction = (action: string, userId: string, metadata: any = {}) => {
+  logger.info(`${EVENT_EMOJIS.userAction} Usuário ${userId} realizou: ${action}`, metadata);
+};
+
+export const logSystemStatus = (status: 'startup' | 'shutdown' | 'ready', metadata: any = {}) => {
+  const emoji = EVENT_EMOJIS[status];
+  const messages = {
+    startup: 'Sistema iniciando...',
+    shutdown: 'Sistema encerrando...',
+    ready: 'Sistema pronto para uso!'
+  };
+  
+  logger.info(`${emoji} ${messages[status]}`, {
+    ...metadata,
+    systemInfo: getSystemInfo()
+  });
 };
 
 export default logger; 
