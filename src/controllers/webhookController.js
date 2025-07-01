@@ -177,22 +177,36 @@ class WebhookController {
   // Processar mensagem individual
   async processMessage(messageData, instance, io, instanceName) {
     try {
+      logger.debug('🔄 Iniciando processamento de mensagem', {
+        messageId: messageData.key?.id,
+        instanceName,
+        messageData
+      });
+
       // Validar dados da mensagem
       const validation = validateData(webhookMessageSchema, messageData);
       if (!validation.success) {
-        logger.warn('Dados de mensagem inválidos:', { 
+        logger.warn('❌ Dados de mensagem inválidos:', { 
           error: validation.error, 
           messageId: messageData.key?.id,
-          instanceName 
+          instanceName,
+          messageData
         });
         return;
       }
       
       const message = validation.data;
       
+      logger.debug('✅ Mensagem validada:', {
+        messageId: message.key.id,
+        remoteJid: message.key.remoteJid,
+        pushName: message.pushName,
+        messageType: message.message ? Object.keys(message.message)[0] : 'unknown'
+      });
+      
       // Ignorar mensagens enviadas por nós
       if (message.key.fromMe) {
-        logger.debug('Ignorando mensagem própria:', { 
+        logger.debug('⏭️ Ignorando mensagem própria:', { 
           messageId: message.key.id,
           instanceName 
         });
@@ -201,7 +215,7 @@ class WebhookController {
       
       // Ignorar mensagens de status/broadcast se configurado
       if (message.key.remoteJid === 'status@broadcast') {
-        logger.debug('Ignorando status do WhatsApp:', { 
+        logger.debug('⏭️ Ignorando status do WhatsApp:', { 
           messageId: message.key.id,
           instanceName 
         });
@@ -215,7 +229,7 @@ class WebhookController {
       );
       
       if (existingMessage) {
-        logger.debug('Mensagem já processada:', { 
+        logger.debug('⏭️ Mensagem já processada:', { 
           messageId: message.key.id,
           instanceName 
         });
@@ -225,66 +239,74 @@ class WebhookController {
       // Determinar tipo e conteúdo da mensagem
       const messageInfo = this.extractMessageInfo(message);
       
-      // Obter ou criar cliente
-      const customerData = await customerService.findOrCreate({
-        jid: message.key.remoteJid,
-        pushName: message.pushName || 'Usuário',
-        instanceName: instanceName
-      });
-      
-      // Obter ou criar ticket
-      const ticket = await ticketService.findOrCreate(customerData, instance);
-      
-      // Criar mensagem no banco
-      const savedMessage = await messageService.create({
-        ticketId: ticket.id,
+      logger.debug('📝 Informações da mensagem extraídas:', {
+        messageId: message.key.id,
+        type: messageInfo.type,
         content: messageInfo.content,
-        senderId: customerData.id,
-        senderName: customerData.name,
-        senderType: 'customer',
-        messageType: messageInfo.type,
-        whatsappMessageId: message.key.id,
-        whatsappTimestamp: message.messageTimestamp,
-        instanceName: instanceName,
-        timestamp: new Date(message.messageTimestamp * 1000).toISOString(),
-        isGroup: message.key.remoteJid.includes('@g.us'),
-        participant: message.key.participant,
-        status: message.status || 'RECEIVED',
-        ...messageInfo.mediaInfo
+        mediaInfo: messageInfo.mediaInfo
       });
       
-      // Emitir evento via WebSocket
-      if (io) {
-        io.emit('new-message', {
-          message: savedMessage,
-          ticket: ticket,
-          customer: customerData,
-          instance: instanceName,
-          messageInfo: messageInfo
-        });
-        
-        // Emitir evento específico para o tipo de mensagem
-        io.emit(`message-${messageInfo.type}`, {
-          message: savedMessage,
-          instance: instanceName
-        });
-      }
+      // Formatar mensagem para o messageService
+      const formattedMessage = {
+        id: message.key.id,
+        from: message.key.remoteJid,
+        pushName: message.pushName,
+        messageType: messageInfo.type,
+        content: messageInfo.content,
+        messageTimestamp: message.messageTimestamp,
+        metadata: {
+          instance_name: instanceName,
+          whatsapp: {
+            messageId: message.key.id,
+            timestamp: message.messageTimestamp,
+            jid: message.key.remoteJid,
+            instance_name: instanceName,
+            sender_phone: message.key.remoteJid.split('@')[0],
+            is_from_whatsapp: true,
+            enhanced_processing: true,
+            ...messageInfo.mediaInfo
+          }
+        },
+        message: message.message
+      };
+
+      logger.debug('📨 Mensagem formatada para processamento:', {
+        messageId: formattedMessage.id,
+        formattedMessage
+      });
+
+      // Processar mensagem através do messageService
+      const result = await messageService.processWhatsAppMessage(formattedMessage, instanceName);
       
-      logger.info('Mensagem processada com sucesso:', {
-        messageId: savedMessage.id,
-        ticketId: ticket.id,
-        customerId: customerData.id,
+      logger.info('✅ Mensagem processada com sucesso:', {
+        messageId: message.key.id,
+        ticketId: result.ticket.id,
+        profileId: result.profile.id,
         type: messageInfo.type,
         instanceName: instanceName,
         isGroup: message.key.remoteJid.includes('@g.us')
       });
       
+      // Emitir evento via WebSocket
+      if (io) {
+        io.emit('new-message', {
+          message: formattedMessage,
+          ticket: result.ticket,
+          profile: result.profile,
+          instance: instanceName,
+          messageInfo: messageInfo
+        });
+      }
+      
     } catch (error) {
-      logger.error('Erro ao processar mensagem individual:', { 
-        error: error.message, 
+      logger.error('❌ Erro ao processar mensagem individual:', { 
+        error: error.message,
+        stack: error.stack,
         messageId: messageData.key?.id,
-        instanceName 
+        instanceName,
+        messageData
       });
+      throw error;
     }
   }
   

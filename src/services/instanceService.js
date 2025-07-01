@@ -1,4 +1,4 @@
-const { supabaseAdmin } = require('../config/supabase');
+const { supabase } = require('../config/supabase');
 const logger = require('../config/logger');
 const { v4: uuidv4 } = require('uuid');
 
@@ -7,7 +7,7 @@ class InstanceService {
   // Buscar instância por nome
   async findByName(instanceName) {
     try {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .select('*')
         .eq('instance_name', instanceName)
@@ -28,7 +28,7 @@ class InstanceService {
   // Buscar instância por ID
   async findById(instanceId) {
     try {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .select('*')
         .eq('id', instanceId)
@@ -53,16 +53,17 @@ class InstanceService {
       
       const instance = {
         id: instanceId,
-        name: instanceData.name,
-        instance_name: instanceData.instanceName,
-        api_url: instanceData.apiUrl,
-        api_key: instanceData.apiKey,
-        webhook_url: instanceData.webhookUrl || null,
-        status: 'disconnected',
-        department_id: instanceData.departmentId || null,
-        is_default: instanceData.isDefault || false,
+        name: instanceData.name || instanceData.instance_name,
+        instance_name: instanceData.instance_name,
+        api_url: instanceData.api_url,
+        api_key: instanceData.api_key,
+        webhook_url: instanceData.webhook_url || null,
+        status: instanceData.status || 'disconnected',
+        department_id: instanceData.department_id || null,
+        is_default: instanceData.is_default || false,
         metadata: {
           created_at: new Date().toISOString(),
+          created_via: instanceData.created_via || 'api',
           ...instanceData.metadata
         }
       };
@@ -72,7 +73,7 @@ class InstanceService {
         await this.unsetDefaultInstances();
       }
       
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .insert(instance)
         .select()
@@ -99,7 +100,7 @@ class InstanceService {
         await this.unsetDefaultInstances();
       }
       
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .update(updateData)
         .eq('id', instanceId)
@@ -122,7 +123,7 @@ class InstanceService {
   // Deletar instância
   async delete(instanceId) {
     try {
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from('evolution_instances')
         .delete()
         .eq('id', instanceId);
@@ -169,7 +170,7 @@ class InstanceService {
   // Desmarcar todas as instâncias como padrão
   async unsetDefaultInstances() {
     try {
-      const { error } = await supabaseAdmin
+      const { error } = await supabase
         .from('evolution_instances')
         .update({ is_default: false })
         .eq('is_default', true);
@@ -187,7 +188,7 @@ class InstanceService {
   // Buscar instância padrão
   async getDefault() {
     try {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .select('*')
         .eq('is_default', true)
@@ -208,7 +209,7 @@ class InstanceService {
   // Listar instâncias
   async list(page = 1, limit = 50, filters = {}) {
     try {
-      let query = supabaseAdmin
+      let query = supabase
         .from('evolution_instances')
         .select('*', { count: 'exact' })
         .order('created_at', { ascending: false });
@@ -255,7 +256,7 @@ class InstanceService {
   // Buscar instâncias ativas
   async getActiveInstances() {
     try {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .select('*')
         .eq('status', 'connected');
@@ -275,7 +276,7 @@ class InstanceService {
   // Obter estatísticas de instâncias
   async getStats() {
     try {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .select('status, metadata');
       
@@ -322,7 +323,7 @@ class InstanceService {
   // Obter logs da instância
   async getLogs(instanceName, page = 1, limit = 50) {
     try {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_logs')
         .select('*')
         .eq('instance_name', instanceName)
@@ -360,7 +361,7 @@ class InstanceService {
       const oneDayAgo = new Date();
       oneDayAgo.setDate(oneDayAgo.getDate() - 1);
       
-      const { data: messageStats, error: messageError } = await supabaseAdmin
+      const { data: messageStats, error: messageError } = await supabase
         .from('evolution_messages')
         .select('*')
         .eq('instance_name', instanceName)
@@ -371,7 +372,7 @@ class InstanceService {
         throw messageError;
       }
       
-      const { data: ticketStats, error: ticketError } = await supabaseAdmin
+      const { data: ticketStats, error: ticketError } = await supabase
         .from('evolution_tickets')
         .select('*')
         .eq('instance_name', instanceName)
@@ -458,7 +459,7 @@ class InstanceService {
         throw new Error('Instância não encontrada');
       }
       
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .update({
           webhook_url: webhookData.webhook_url,
@@ -493,7 +494,7 @@ class InstanceService {
         throw new Error('Instância não encontrada');
       }
       
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .update({
           settings: {
@@ -530,7 +531,7 @@ class InstanceService {
         throw new Error('Instância não encontrada');
       }
       
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('evolution_instances')
         .update({
           integrations: {

@@ -11,6 +11,7 @@ const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   host: process.env.HOST || 'localhost',
   baseUrl: process.env.BASE_URL || 'http://localhost:3001',
+  apiPrefix: '/api',
 
   // Supabase
   supabase: {
@@ -22,7 +23,7 @@ const config = {
   // Evolution API
   evolution: {
     baseUrl: process.env.EVOLUTION_API_URL || 'http://localhost:8080',
-    webhookUrl: process.env.WEBHOOK_BASE_URL || 'http://localhost:3001/api',
+    webhookUrl: process.env.WEBHOOK_BASE_URL || 'http://localhost:3001',
     defaultInstance: process.env.DEFAULT_INSTANCE || 'default'
   },
 
@@ -64,6 +65,14 @@ const config = {
       delay: 1000 // delay inicial de 1 segundo
     }
   }
+};
+
+// Construir URLs completas
+config.urls = {
+  api: `${config.evolution.webhookUrl}${config.apiPrefix}`,
+  health: `${config.evolution.webhookUrl}${config.apiPrefix}/health`,
+  webhookGeneric: `${config.evolution.webhookUrl}${config.apiPrefix}/:event`,
+  webhookMessages: `${config.evolution.webhookUrl}${config.apiPrefix}/webhook/evolution/:instanceName`
 };
 
 export default config; 
