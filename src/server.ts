@@ -279,33 +279,89 @@ class EvolutionWebhookServer {
 
   public async start(): Promise<void> {
     try {
-      logSystemStatus('startup');
+      // Banner de inicialização
+      const banner = [
+        '🌟 BKCRM - Evolution Webhook Server 🌟',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+        `🚀 Iniciando servidor em modo ${config.nodeEnv.toUpperCase()}`,
+        '',
+        '📊 Configurações do Servidor:',
+        `  • Ambiente: ${config.nodeEnv}`,
+        `  • Porta: ${config.port}`,
+        `  • Log Level: ${config.logging.level}`,
+        `  • Diretório de Logs: ${config.logging.directory}`,
+        '',
+        '🔒 Configurações de Segurança:',
+        `  • CORS: ${config.corsOrigins.join(', ')}`,
+        `  • Rate Limit: 100 req/min`,
+        `  • Helmet: Ativado`,
+        `  • Compressão: Ativada`,
+        '',
+        '🔌 Serviços Integrados:'
+      ].join('\n');
+
+      console.log('\n' + banner + '\n');
 
       // Conectar ao banco
+      logger.info('📦 Conectando ao PostgreSQL...');
       await db.connect();
-      logger.info('📦 Conectado ao banco de dados PostgreSQL');
+      logger.info('✅ PostgreSQL conectado com sucesso!');
 
       // Rodar migrações
+      logger.info('🔄 Aplicando migrações do banco...');
       await runMigrations();
-      logger.info('🔄 Migrações do banco aplicadas com sucesso');
+      logger.info('✅ Migrações aplicadas com sucesso!');
 
       // Conectar ao Redis
+      logger.info('⚡ Conectando ao Redis...');
       await cache.connect();
-      logger.info('⚡ Conectado ao Redis');
+      logger.info('✅ Redis conectado com sucesso!');
 
       // Conectar ao RabbitMQ
+      logger.info('🐰 Conectando ao RabbitMQ...');
       await queue.connect();
-      logger.info('🐰 Conectado ao RabbitMQ');
+      logger.info('✅ RabbitMQ conectado com sucesso!');
 
       // Iniciar consumers
+      logger.info('📥 Iniciando consumidores de fila...');
       await this.setupQueueConsumers();
-      logger.info('📥 Consumidores de fila iniciados');
+      logger.info('✅ Consumidores iniciados com sucesso!');
 
       // Iniciar servidor HTTP
       this.server.listen(config.port, () => {
-        logSystemStatus('ready', { 
+        const urls = [
+          '',
+          '🌐 URLs Disponíveis:',
+          `  • API: https://webhook.bkcrm.devsible.com.br/api`,
+          `  • Health Check: https://webhook.bkcrm.devsible.com.br/api/health`,
+          `  • Estatísticas: https://webhook.bkcrm.devsible.com.br/api/stats`,
+          `  • Webhook Evolution: https://webhook.bkcrm.devsible.com.br/api/webhook/evolution/:instanceName`,
+          '',
+          '✨ Recursos Ativos:',
+          '  ✓ PostgreSQL (Persistência)',
+          '  ✓ Redis (Cache)',
+          '  ✓ RabbitMQ (Filas)',
+          '  ✓ WebSocket (Real-time)',
+          '  ✓ Rate Limiting',
+          '  ✓ CORS',
+          '  ✓ Helmet',
+          '  ✓ Compressão',
+          '',
+          '🎉 Servidor pronto para uso!',
+          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+        ].join('\n');
+
+        console.log(urls);
+        
+        logSystemStatus('ready', {
           port: config.port,
-          environment: config.nodeEnv
+          environment: config.nodeEnv,
+          services: {
+            postgresql: true,
+            redis: cache.isConnected(),
+            rabbitmq: queue.isConnected(),
+            websocket: true
+          }
         });
       });
     } catch (error) {
@@ -316,26 +372,42 @@ class EvolutionWebhookServer {
 
   private async gracefulShutdown(): Promise<void> {
     try {
+      const banner = [
+        '',
+        '🛑 Iniciando desligamento gracioso do servidor',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+      ].join('\n');
+
+      console.log(banner);
+
       // Parar de aceitar novas conexões
       this.server.close();
-      logger.info('🛑 Servidor HTTP parado');
+      logger.info('✅ Servidor HTTP parado');
 
       // Desconectar WebSocket
       this.io.close();
-      logger.info('🔌 Conexões WebSocket encerradas');
+      logger.info('✅ Conexões WebSocket encerradas');
 
       // Desconectar do banco
       await db.disconnect();
-      logger.info('📦 Desconectado do banco de dados');
+      logger.info('✅ PostgreSQL desconectado');
 
       // Desconectar do Redis
       await cache.disconnect();
-      logger.info('⚡ Desconectado do Redis');
+      logger.info('✅ Redis desconectado');
 
       // Desconectar do RabbitMQ
       await queue.disconnect();
-      logger.info('🐰 Desconectado do RabbitMQ');
+      logger.info('✅ RabbitMQ desconectado');
 
+      const finalBanner = [
+        '',
+        '✨ Servidor finalizado com sucesso!',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+        ''
+      ].join('\n');
+
+      console.log(finalBanner);
       process.exit(0);
     } catch (error) {
       logError(error as Error, 'Erro durante shutdown');
