@@ -1,60 +1,69 @@
-import { config } from 'dotenv';
-import { ServerConfig } from '../types';
+import dotenv from 'dotenv';
+dotenv.config();
 
-// Carregar variáveis de ambiente
-config();
+const config = {
+  // Ambiente
+  env: process.env.NODE_ENV || 'development',
+  isDev: process.env.NODE_ENV === 'development',
+  isProd: process.env.NODE_ENV === 'production',
 
-const getConfig = (): ServerConfig => {
-  const nodeEnv = (process.env.NODE_ENV as 'development' | 'production' | 'test') || 'development';
-  
-  return {
-    port: parseInt(process.env.PORT || '3001', 10),
-    nodeEnv,
-    corsOrigins: process.env.CORS_ORIGINS?.split(',') || [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://bkcrm.devsible.com.br',
-      'https://webhook.bkcrm.devsible.com.br'
-    ],
-    webhookSecret: process.env.WEBHOOK_SECRET,
-    
-    database: {
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432', 10),
-      name: process.env.DB_NAME || 'evolution_webhook',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      ssl: process.env.DB_SSL === 'true' || nodeEnv === 'production'
+  // Servidor
+  port: parseInt(process.env.PORT || '3001', 10),
+  host: process.env.HOST || 'localhost',
+  baseUrl: process.env.BASE_URL || 'http://localhost:3001',
+
+  // Supabase
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    key: process.env.SUPABASE_KEY,
+    serviceKey: process.env.SUPABASE_SERVICE_KEY
+  },
+
+  // Evolution API
+  evolution: {
+    baseUrl: process.env.EVOLUTION_API_URL || 'http://localhost:8080',
+    webhookUrl: process.env.WEBHOOK_BASE_URL || 'http://localhost:3001/api',
+    defaultInstance: process.env.DEFAULT_INSTANCE || 'default'
+  },
+
+  // Logs
+  logs: {
+    level: process.env.LOG_LEVEL || 'info',
+    directory: process.env.LOG_DIRECTORY || './logs',
+    maxSize: process.env.LOG_MAX_SIZE || '20m',
+    maxFiles: process.env.LOG_MAX_FILES || '14d',
+    errorMaxFiles: process.env.LOG_ERROR_MAX_FILES || '30d',
+    webhookMaxFiles: process.env.LOG_WEBHOOK_MAX_FILES || '7d'
+  },
+
+  // Segurança
+  security: {
+    cors: {
+      origin: process.env.CORS_ORIGIN || '*',
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization']
     },
-    
-    redis: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD,
-      db: parseInt(process.env.REDIS_DB || '0', 10)
-    },
-    
-    rabbitmq: {
-      url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
-      queues: {
-        messages: process.env.RABBITMQ_MESSAGES_QUEUE || 'evolution.messages',
-        events: process.env.RABBITMQ_EVENTS_QUEUE || 'evolution.events',
-        deadLetter: process.env.RABBITMQ_DEAD_LETTER_QUEUE || 'evolution.dead_letter'
-      }
-    },
-    
-    logging: {
-      level: process.env.LOG_LEVEL || (nodeEnv === 'production' ? 'info' : 'debug'),
-      consoleLevel: process.env.LOG_CONSOLE_LEVEL || (nodeEnv === 'production' ? 'info' : 'debug'),
-      fileLevel: process.env.LOG_FILE_LEVEL || (nodeEnv === 'production' ? 'info' : 'debug'),
-      directory: process.env.LOG_DIRECTORY || 'logs',
-      maxSize: process.env.LOG_MAX_SIZE || '20m',
-      maxFiles: process.env.LOG_MAX_FILES || '14d',
-      compress: process.env.LOG_COMPRESS === 'true' || nodeEnv === 'production',
-      errorMaxFiles: process.env.LOG_ERROR_MAX_FILES || '30d',
-      webhookMaxFiles: process.env.LOG_WEBHOOK_MAX_FILES || '7d'
+    rateLimit: {
+      windowMs: 15 * 60 * 1000, // 15 minutos
+      max: 100 // limite de 100 requisições por windowMs
     }
-  };
+  },
+
+  // Cache
+  cache: {
+    ttl: parseInt(process.env.CACHE_TTL || '300', 10), // 5 minutos em segundos
+    checkPeriod: parseInt(process.env.CACHE_CHECK_PERIOD || '600', 10) // 10 minutos em segundos
+  },
+
+  // Filas
+  queue: {
+    concurrency: parseInt(process.env.QUEUE_CONCURRENCY || '3', 10),
+    attempts: parseInt(process.env.QUEUE_ATTEMPTS || '3', 10),
+    backoff: {
+      type: 'exponential',
+      delay: 1000 // delay inicial de 1 segundo
+    }
+  }
 };
 
-export default getConfig(); 
+export default config; 

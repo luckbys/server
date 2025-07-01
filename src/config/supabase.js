@@ -1,61 +1,25 @@
 const { createClient } = require('@supabase/supabase-js');
-const logger = require('./logger');
+const logger = require('../utils/logger');
 
-// Validar variáveis de ambiente
-if (!process.env.SUPABASE_URL) {
-  logger.error('SUPABASE_URL não definida');
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  logger.error('❌ Variáveis de ambiente do Supabase não configuradas');
   process.exit(1);
 }
 
-if (!process.env.SUPABASE_ANON_KEY) {
-  logger.error('SUPABASE_ANON_KEY não definida');
-  process.exit(1);
-}
-
-// Cliente público (com RLS)
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
-
-// Cliente administrativo (sem RLS)
-let supabaseAdmin = null;
-if (process.env.SUPABASE_SERVICE_KEY) {
-  supabaseAdmin = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  );
-}
-
-// Função para testar conexão
-async function testConnection() {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id')
-      .limit(1);
-    
-    if (error) {
-      logger.error('Erro ao testar conexão com Supabase:', error);
-      return false;
-    }
-    
-    logger.info('Conexão com Supabase estabelecida com sucesso');
-    return true;
-  } catch (error) {
-    logger.error('Erro ao conectar com Supabase:', error);
-    return false;
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false
+  },
+  db: {
+    schema: 'public'
   }
-}
+});
 
-module.exports = {
-  supabase,
-  supabaseAdmin,
-  testConnection
-}; 
+logger.info('✅ Cliente Supabase configurado');
+
+module.exports = { supabase }; 

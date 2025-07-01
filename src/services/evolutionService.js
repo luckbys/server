@@ -1,6 +1,7 @@
 const axios = require('axios');
 const logger = require('../config/logger');
 const instanceService = require('./instanceService');
+const { supabase } = require('../config/supabase');
 
 class EvolutionService {
   
@@ -8,6 +9,7 @@ class EvolutionService {
     this.defaultTimeout = 30000;
     this.retryAttempts = 3;
     this.retryDelay = 1000;
+    this.supabase = supabase;
   }
   
   // === MÉTODOS DE INSTÂNCIA ===
@@ -898,6 +900,111 @@ class EvolutionService {
         valid: false,
         error: error.message
       };
+    }
+  }
+
+  async updateInstanceStatus(instanceName, data) {
+    try {
+      logger.info('🔄 Atualizando status da instância', {
+        instance: instanceName,
+        status: data.status
+      });
+
+      const { error } = await this.supabase
+        .from('evolution_instances')
+        .update({
+          status: data.status,
+          updated_at: new Date().toISOString(),
+          metadata: {
+            ...data.metadata,
+            lastStatusUpdate: new Date().toISOString()
+          }
+        })
+        .eq('instance_name', instanceName);
+
+      if (error) throw error;
+
+      logger.info('✅ Status da instância atualizado', {
+        instance: instanceName,
+        status: data.status
+      });
+    } catch (error) {
+      logger.error('❌ Erro ao atualizar status da instância', {
+        error: error.message,
+        instance: instanceName
+      });
+      throw error;
+    }
+  }
+
+  async getInstanceByName(instanceName) {
+    try {
+      const { data, error } = await this.supabase
+        .from('evolution_instances')
+        .select('*')
+        .eq('instance_name', instanceName)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('❌ Erro ao buscar instância', {
+        error: error.message,
+        instance: instanceName
+      });
+      throw error;
+    }
+  }
+
+  async updateInstanceQRCode(instanceName, qrCode) {
+    try {
+      const { error } = await this.supabase
+        .from('evolution_instances')
+        .update({
+          qr_code: qrCode,
+          updated_at: new Date().toISOString()
+        })
+        .eq('instance_name', instanceName);
+
+      if (error) throw error;
+
+      logger.info('✅ QR Code da instância atualizado', {
+        instance: instanceName
+      });
+    } catch (error) {
+      logger.error('❌ Erro ao atualizar QR Code da instância', {
+        error: error.message,
+        instance: instanceName
+      });
+      throw error;
+    }
+  }
+
+  async syncInstance(instanceName, data) {
+    try {
+      const { error } = await this.supabase
+        .from('evolution_instances')
+        .update({
+          last_sync: new Date().toISOString(),
+          status: data.status || 'unknown',
+          metadata: {
+            ...data,
+            lastSync: new Date().toISOString()
+          }
+        })
+        .eq('instance_name', instanceName);
+
+      if (error) throw error;
+
+      logger.info('✅ Instância sincronizada', {
+        instance: instanceName
+      });
+    } catch (error) {
+      logger.error('❌ Erro ao sincronizar instância', {
+        error: error.message,
+        instance: instanceName
+      });
+      throw error;
     }
   }
 }

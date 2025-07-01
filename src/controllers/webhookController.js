@@ -1,4 +1,4 @@
-const logger = require('../config/logger');
+const logger = require('../utils/logger');
 const { 
   validateData, 
   validateEvolutionEvent,
@@ -18,6 +18,7 @@ const customerService = require('../services/customerService');
 const ticketService = require('../services/ticketService');
 const messageService = require('../services/messageService');
 const instanceService = require('../services/instanceService');
+const evolutionService = require('../services/evolutionService');
 
 class WebhookController {
   
