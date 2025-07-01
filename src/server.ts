@@ -12,6 +12,7 @@ import db from './database/connection';
 import cache from './services/cache';
 import queue from './services/queue';
 import runMigrations from './database/migrations/run';
+import { addRequestId, requestLogger } from './middleware/security';
 
 import webhookRoutes from './routes/webhook';
 import healthRoutes from './routes/health';
@@ -47,6 +48,10 @@ class EvolutionWebhookServer {
   }
 
   private setupMiddlewares(): void {
+    // Request ID e Logging
+    this.app.use(addRequestId);
+    this.app.use(requestLogger);
+
     // Segurança
     this.app.use(helmet());
     
@@ -65,6 +70,13 @@ class EvolutionWebhookServer {
         await this.rateLimiter.consume(req.ip || 'unknown');
         next();
       } catch (rateLimiterRes) {
+        logger.warn('🚫 Rate limit excedido', {
+          requestId: req.id,
+          ip: req.ip,
+          path: req.path,
+          retryAfter: Math.round(rateLimiterRes.msBeforeNext / 1000) || 1
+        });
+
         res.status(429).json({
           success: false,
           message: 'Rate limit excedido',

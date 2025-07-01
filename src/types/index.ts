@@ -155,7 +155,14 @@ export interface ServerConfig {
   };
   logging: {
     level: string;
-    file?: string;
+    consoleLevel: string;
+    fileLevel: string;
+    directory: string;
+    maxSize: string;
+    maxFiles: string;
+    compress: boolean;
+    errorMaxFiles: string;
+    webhookMaxFiles: string;
   };
 }
 

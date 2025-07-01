@@ -4,8 +4,8 @@ process.env.PORT = '3001';
 process.env.SUPABASE_URL = 'https://test.supabase.co';
 process.env.SUPABASE_ANON_KEY = 'test_key';
 process.env.WEBHOOK_SECRET = 'test_secret';
-process.env.ALLOWED_ORIGINS = 'http://localhost:3000,http://localhost:3001';
-process.env.WEBHOOK_BASE_URL = 'https://webhook.bkcrm.devsible.com.br';
+process.env.ALLOWED_ORIGINS = 'http://localhost:3000,http://localhost:3001,ws://localhost:3000,ws://localhost:3001';
+process.env.WEBHOOK_BASE_URL = 'http://localhost:3001';
 
 const express = require('express');
 const { createServer } = require('http');
@@ -19,9 +19,12 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: ["http://localhost:3000", "http://localhost:3001"],
+    methods: ["GET", "POST"],
+    credentials: true,
+    transports: ['websocket', 'polling']
+  },
+  allowEIO3: true
 });
 
 const PORT = process.env.PORT || 3001;

@@ -3,6 +3,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
 const logger = require('../config/logger');
+const { v4: uuidv4 } = require('uuid');
 
 // Configuração CORS
 const corsOptions = {
@@ -52,59 +53,87 @@ const limiter = rateLimit({
 // Rate limiting específico para webhooks (mais permissivo)
 const webhookLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minuto
-  max: 1000, // máximo 1000 requests por minuto para webhooks
+  max: 100, // limite de 100 requisições por minuto
   message: {
-    error: 'Rate limit de webhook excedido'
-  },
-  standardHeaders: false,
-  legacyHeaders: false
+    success: false,
+    message: 'Muitas requisições, tente novamente mais tarde',
+    error: 'TOO_MANY_REQUESTS'
+  }
 });
 
 // Middleware para verificar assinatura do webhook
-function verifyWebhookSignature(req, res, next) {
-  const signature = req.headers['x-signature'];
+const verifyWebhookSignature = (req, res, next) => {
+  const signature = req.headers['x-hub-signature'];
   const webhookSecret = process.env.WEBHOOK_SECRET;
-  
+
   if (!webhookSecret) {
-    logger.warn('WEBHOOK_SECRET não configurado, pulando verificação de assinatura');
+    logger.warn('🔒 Webhook secret não configurado');
     return next();
   }
-  
+
   if (!signature) {
-    logger.warn('Webhook recebido sem assinatura', {
-      ip: req.ip,
-      userAgent: req.get('User-Agent')
+    logger.warn('🔒 Assinatura do webhook não encontrada', { ip: req.ip });
+    return res.status(401).json({
+      success: false,
+      message: 'Assinatura do webhook não encontrada',
+      error: 'MISSING_SIGNATURE'
     });
-    return res.status(401).json({ error: 'Assinatura obrigatória' });
   }
+
+  const hmac = crypto.createHmac('sha1', webhookSecret);
+  const calculatedSignature = `sha1=${hmac
+    .update(JSON.stringify(req.body))
+    .digest('hex')}`;
+
+  if (signature !== calculatedSignature) {
+    logger.warn('🔒 Assinatura do webhook inválida', {
+      ip: req.ip,
+      expectedSignature: calculatedSignature,
+      receivedSignature: signature
+    });
+    return res.status(401).json({
+      success: false,
+      message: 'Assinatura do webhook inválida',
+      error: 'INVALID_SIGNATURE'
+    });
+  }
+
+  next();
+};
+
+// Middleware para adicionar requestId
+const addRequestId = (req, res, next) => {
+  req.id = req.headers['x-request-id'] || uuidv4();
+  res.setHeader('x-request-id', req.id);
+  next();
+};
+
+// Middleware para logging de requisições
+const requestLogger = (req, res, next) => {
+  const start = Date.now();
   
-  try {
-    const body = JSON.stringify(req.body);
-    const expectedSignature = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(body)
-      .digest('hex');
-    
-    const providedSignature = signature.replace('sha256=', '');
-    
-    if (!crypto.timingSafeEqual(
-      Buffer.from(expectedSignature, 'hex'),
-      Buffer.from(providedSignature, 'hex')
-    )) {
-      logger.warn('Assinatura de webhook inválida', {
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        providedSignature: providedSignature.substring(0, 8) + '...'
-      });
-      return res.status(401).json({ error: 'Assinatura inválida' });
+  // Logging ao finalizar a requisição
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const logData = {
+      requestId: req.id,
+      method: req.method,
+      url: req.originalUrl,
+      status: res.statusCode,
+      duration: `${duration}ms`,
+      userAgent: req.headers['user-agent'],
+      ip: req.ip
+    };
+
+    if (res.statusCode >= 400) {
+      logger.warn('🌐 Requisição com erro', logData);
+    } else {
+      logger.http('🌐 Requisição processada', logData);
     }
-    
-    next();
-  } catch (error) {
-    logger.error('Erro ao verificar assinatura do webhook:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor' });
-  }
-}
+  });
+
+  next();
+};
 
 // Sanitização básica de entrada
 function sanitizeInput(req, res, next) {
@@ -114,31 +143,6 @@ function sanitizeInput(req, res, next) {
     delete req.body.constructor;
     delete req.body.prototype;
   }
-  next();
-}
-
-// Middleware para log de requisições
-function requestLogger(req, res, next) {
-  const start = Date.now();
-  
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    const logData = {
-      method: req.method,
-      url: req.originalUrl,
-      status: res.statusCode,
-      duration: `${duration}ms`,
-      ip: req.ip,
-      userAgent: req.get('User-Agent')
-    };
-    
-    if (res.statusCode >= 400) {
-      logger.warn('Request com erro', logData);
-    } else {
-      logger.info('Request processado', logData);
-    }
-  });
-  
   next();
 }
 
@@ -159,6 +163,7 @@ module.exports = {
   limiter,
   webhookLimiter,
   verifyWebhookSignature,
-  sanitizeInput,
-  requestLogger
+  addRequestId,
+  requestLogger,
+  sanitizeInput
 }; 

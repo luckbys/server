@@ -352,4 +352,121 @@ Para suporte, entre em contato através dos issues do GitHub.
 
 ---
 
-**Feito com ❤️ para integração WhatsApp/Evolution API** 
+**Feito com ❤️ para integração WhatsApp/Evolution API**
+
+# Sistema de Logs do BKCRM
+
+## Estrutura de Logs
+
+O sistema de logs foi aprimorado para fornecer informações mais detalhadas e melhor rastreabilidade. Principais características:
+
+### 1. Níveis de Log
+
+- `error` (0): Erros críticos que precisam de atenção imediata
+- `warn` (1): Avisos importantes mas não críticos
+- `info` (2): Informações gerais sobre o funcionamento do sistema
+- `http` (3): Logs específicos de requisições HTTP
+- `verbose` (4): Informações detalhadas para debugging
+- `debug` (5): Informações muito detalhadas para desenvolvimento
+- `silly` (6): Logs extremamente detalhados
+
+### 2. Arquivos de Log
+
+Os logs são separados em diferentes arquivos para melhor organização:
+
+- `logs/bkcrm-YYYY-MM-DD.log`: Logs gerais do sistema
+- `logs/errors/error-YYYY-MM-DD.log`: Logs específicos de erros
+- `logs/webhooks/webhook-YYYY-MM-DD.log`: Logs de webhooks
+
+### 3. Rotação de Logs
+
+- Logs são rotacionados diariamente
+- Arquivos antigos são compactados automaticamente
+- Configuração de retenção por tipo de log:
+  - Logs gerais: 14 dias
+  - Logs de erro: 30 dias
+  - Logs de webhook: 7 dias
+
+### 4. Rastreabilidade
+
+Cada requisição recebe um ID único (requestId) que é mantido em todo o ciclo de vida da requisição, permitindo:
+- Rastreamento de requisições entre serviços
+- Correlação de logs relacionados
+- Debugging mais eficiente
+
+### 5. Informações Registradas
+
+Cada log inclui:
+- Timestamp preciso
+- Nível do log
+- Mensagem descritiva
+- RequestId (quando aplicável)
+- Metadados relevantes
+- Informações do sistema (em logs de erro)
+- Stack trace (em erros)
+
+### 6. Configuração
+
+Adicione as seguintes variáveis ao seu arquivo `.env`:
+
+```env
+# Logging
+LOG_LEVEL=debug
+LOG_CONSOLE_LEVEL=debug
+LOG_FILE_LEVEL=info
+LOG_DIRECTORY=logs
+LOG_MAX_SIZE=20m
+LOG_MAX_FILES=14d
+LOG_COMPRESS=false
+LOG_ERROR_MAX_FILES=30d
+LOG_WEBHOOK_MAX_FILES=7d
+```
+
+### 7. Exemplos de Logs
+
+```javascript
+// Log de webhook
+logger.info('📨 Webhook recebido', {
+  requestId: 'abc-123',
+  event: 'MESSAGE_RECEIVED',
+  instanceName: 'instance1'
+});
+
+// Log de erro
+logger.error('❌ Erro ao processar mensagem', {
+  requestId: 'abc-123',
+  messageId: '123',
+  error: 'Mensagem inválida'
+});
+
+// Log de performance
+logger.verbose('⚡ Métrica de performance', {
+  requestId: 'abc-123',
+  operation: 'processMessage',
+  duration: '150ms'
+});
+```
+
+### 8. Boas Práticas
+
+1. **Níveis Apropriados**: Use o nível de log adequado para cada situação
+2. **Contexto**: Sempre inclua informações de contexto relevantes
+3. **Dados Sensíveis**: Nunca logue dados sensíveis (senhas, tokens, etc)
+4. **Performance**: Evite logar dados desnecessários ou muito grandes
+5. **Consistência**: Mantenha um padrão consistente nas mensagens de log
+
+### 9. Monitoramento
+
+Os logs podem ser monitorados usando:
+- Ferramentas de log aggregation (ELK Stack, Graylog)
+- Alertas baseados em padrões de log
+- Dashboards de visualização
+- Análise de tendências e problemas
+
+### 10. Troubleshooting
+
+Para debugar problemas:
+1. Use o requestId para rastrear uma requisição específica
+2. Verifique os logs de erro para detalhes completos
+3. Analise os logs de performance para gargalos
+4. Monitore os logs de webhook para problemas de integração 

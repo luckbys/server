@@ -45,7 +45,14 @@ const getConfig = (): ServerConfig => {
     
     logging: {
       level: process.env.LOG_LEVEL || (nodeEnv === 'production' ? 'info' : 'debug'),
-      file: process.env.LOG_FILE
+      consoleLevel: process.env.LOG_CONSOLE_LEVEL || (nodeEnv === 'production' ? 'info' : 'debug'),
+      fileLevel: process.env.LOG_FILE_LEVEL || (nodeEnv === 'production' ? 'info' : 'debug'),
+      directory: process.env.LOG_DIRECTORY || 'logs',
+      maxSize: process.env.LOG_MAX_SIZE || '20m',
+      maxFiles: process.env.LOG_MAX_FILES || '14d',
+      compress: process.env.LOG_COMPRESS === 'true' || nodeEnv === 'production',
+      errorMaxFiles: process.env.LOG_ERROR_MAX_FILES || '30d',
+      webhookMaxFiles: process.env.LOG_WEBHOOK_MAX_FILES || '7d'
     }
   };
 };
